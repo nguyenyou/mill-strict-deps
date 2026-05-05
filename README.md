@@ -14,31 +14,46 @@ declared direct deps
 ## Why This Matters
 
 In a large Mill build, an engineer may make `appA` depend on `appB` just to use
-one UI component that is available through `appB`:
+one UI component that is available through `appB`.
+
+But `appB` is not a tiny library. It is a huge internal admin app. It depends
+on the core of `appC`, `appD`, and `appE`; those apps pull in many more feature
+modules of their own.
 
 ```text
 appA
  |
  v
-appB
+appB-admin
  |
- v
-uiWidget
+ +--> appC-core --> appC-feature1 --> ...
+ |
+ +--> appD-core --> appD-feature1 --> ...
+ |
+ +--> appE-core --> appE-feature1 --> ...
+ |
+ +--> uiWidget
 ```
 
-That works, but it makes `appA` compile against the larger `appB` module. If
-`appA` only truly uses the UI widget, the cleaner dependency shape is:
+All `appA` wanted was one widget. Instead, its compile classpath now sees a
+whole admin app and the app graph behind it.
+
+If `appA` only truly uses the UI widget, the cleaner dependency shape is:
 
 ```text
-appA     appB
- |        |
- v        v
-uiWidget
+appA --------> uiWidget
+
+appB-admin --> uiWidget
+          \
+           +--> appC-core --> ...
+           +--> appD-core --> ...
+           +--> appE-core --> ...
 ```
 
-`mill-strict-deps` can spot this pattern. It reports `appB` as an unused direct
-module dependency and `uiWidget` as the missing direct dependency. Then `appA`
-can depend on the smaller reusable module instead of the whole app.
+`mill-strict-deps` can spot this pattern. It reports `appB-admin` as an unused
+direct module dependency and `uiWidget` as the missing direct dependency. Then
+`appA` can depend on the small reusable widget module instead of the whole
+admin app.
 
 The result is a smaller compile classpath and a build graph that matches what
 the source code actually uses.

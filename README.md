@@ -161,7 +161,10 @@ out/appA/strictDepsFixPlan.dest/strict-deps-fix-plan.md
 `strictDepsCheck` fails when the module has unused direct module deps or missing
 direct module deps, depending on the module settings.
 
-## Current Scope
+<details>
+<summary>Current Scope</summary>
+
+<br>
 
 This project currently focuses on internal Mill module dependencies only:
 `moduleDeps` and `compileModuleDeps`.
@@ -189,13 +192,20 @@ Planned:
 - Better diagnostics for resource-only, reflection, macro, and annotation
   processor cases.
 
-## Local Development
+</details>
+
+<details>
+<summary>Local Development</summary>
+
+<br>
 
 ```text
 ./mill strictdeps.compile
 ./mill strictdeps.test
 ./mill strictdeps.publishLocal
 ```
+
+</details>
 
 <details>
 <summary>Publishing</summary>

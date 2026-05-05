@@ -1,24 +1,25 @@
 # mill-strict-deps
 
 [Bazel's Strict Java Deps and `unused_deps`](https://blog.bazel.build/2017/06/28/sjd-unused_deps.html)
-shows a simple idea:
+starts from a simple question:
 
 ```text
-declared direct deps
-  + compiler facts about what was actually used
-  -> unused deps, missing direct deps, and fix suggestions
+What did this target say it needs?
+What did the compiler prove it actually used?
+What should we remove or add?
 ```
 
-`mill-strict-deps` implements that idea for the Mill build tool.
+`mill-strict-deps` brings that idea to the Mill build tool. It reads internal
+Mill module edges and Zinc analysis, then reports whether a module depends on
+too much, or uses another module only through a transitive path.
 
 ## Why This Matters
 
-In a large Mill build, an engineer may make `appA` depend on `appB` just to use
-one UI component that is available through `appB`.
+In a large Mill monorepo, one careless dependency edge can quietly drag a whole
+part of the build graph into the compile path.
 
-But `appB` is not a tiny library. It is a huge internal admin app. It depends
-on the core of `appC`, `appD`, and `appE`; those apps pull in many more feature
-modules of their own.
+Suppose `appA` needs one UI component. The component lives in `uiWidget`, but an
+engineer notices that it is available through `appB-admin`, so they write:
 
 ```text
 appA
@@ -35,10 +36,10 @@ appB-admin
  +--> uiWidget
 ```
 
-All `appA` wanted was one widget. Instead, its compile classpath now sees a
-whole admin app and the app graph behind it.
+The code works. The build graph is now lying.
 
-If `appA` only truly uses the UI widget, the cleaner dependency shape is:
+`appA` source did not ask for an admin app, app C, app D, app E, and their
+feature graphs. It asked for one widget. The cleaner shape is:
 
 ```text
 appA --------> uiWidget
@@ -50,37 +51,23 @@ appB-admin --> uiWidget
            +--> appE-core --> ...
 ```
 
-`mill-strict-deps` can spot this pattern. It reports `appB-admin` as an unused
-direct module dependency and `uiWidget` as the missing direct dependency. Then
-`appA` can depend on the small reusable widget module instead of the whole
-admin app.
-
-The result is a smaller compile classpath and a build graph that matches what
-the source code actually uses.
+That is the main selling point: in a large multi-module codebase, precise
+internal module deps help avoid compiling files that the current app never truly
+needed.
 
 ## What's "Strict Deps"?
 
-In a Mill JVM build, strict deps means:
+Strict deps means:
 
 ```text
-If appA directly mentions a class from uiWidget,
+If source code in appA directly mentions a class from uiWidget,
 then appA should directly declare uiWidget in moduleDeps or compileModuleDeps.
 ```
 
 It should not rely on `uiWidget` only because `appB-admin` happens to bring it
 in transitively.
 
-```text
-appA
- |
- v
-appB-admin
- |
- v
-uiWidget
-```
-
-If `appA` source code uses `uiWidget.Button`, then this is not strict enough:
+In Mill terms, this is not strict enough:
 
 ```scala
 object appA extends ScalaModule {
@@ -88,7 +75,7 @@ object appA extends ScalaModule {
 }
 ```
 
-The strict version is:
+If `appA` source uses `uiWidget.Button`, the strict version is:
 
 ```scala
 object appA extends ScalaModule {
@@ -100,6 +87,36 @@ The rule is about compile-time source usage, not runtime packaging. If a module
 is needed only at runtime, through reflection, resources, generated code, or a
 framework convention, that edge may need an explicit suppression or a separate
 runtime dependency story.
+
+## What The Plugin Does
+
+For each Mill JVM module, it compares two lists:
+
+```text
+declared direct internal deps
+actually used internal deps from Zinc analysis
+```
+
+Then it reports:
+
+```text
+declared direct deps - actually used direct deps = unused direct deps
+actually used transitive deps - declared direct deps = missing direct deps
+```
+
+For the widget example, it can report:
+
+```text
+unused direct dep:  appB-admin
+missing direct dep: uiWidget
+```
+
+So the engineer gets a concrete fix plan:
+
+```text
+remove appB-admin
+add uiWidget
+```
 
 ## Install
 
@@ -118,27 +135,27 @@ Mix the trait into a JVM module:
 ```scala
 import io.github.nguyenyou.millstrictdeps.StrictDepsModule
 
-object app extends ScalaModule with StrictDepsModule {
+object appA extends ScalaModule with StrictDepsModule {
   def scalaVersion = "3.8.3"
-  def moduleDeps = Seq(api, server)
+  def moduleDeps = Seq(appBAdmin)
 }
 ```
 
 ## Tasks
 
 ```text
-./mill app.strictDepsReport
-./mill app.strictDepsJsonReport
-./mill app.strictDepsFixPlan
-./mill app.strictDepsCheck
+./mill appA.strictDepsReport
+./mill appA.strictDepsJsonReport
+./mill appA.strictDepsFixPlan
+./mill appA.strictDepsCheck
 ```
 
 Outputs:
 
 ```text
-out/app/strictDepsReport.dest/strict-deps-report.md
-out/app/strictDepsJsonReport.dest/strict-deps-report.json
-out/app/strictDepsFixPlan.dest/strict-deps-fix-plan.md
+out/appA/strictDepsReport.dest/strict-deps-report.md
+out/appA/strictDepsJsonReport.dest/strict-deps-report.json
+out/appA/strictDepsFixPlan.dest/strict-deps-fix-plan.md
 ```
 
 `strictDepsCheck` fails when the module has unused direct module deps or missing
@@ -205,32 +222,6 @@ compare declared modules with used modules
   v
 Markdown report, JSON facts, fix plan, or failing check
 ```
-
-</details>
-
-<details>
-<summary>What It Finds</summary>
-
-<br>
-
-```text
-declared direct deps - actually used direct deps = unused direct deps
-actually used transitive deps - declared direct deps = missing direct deps
-```
-
-Example:
-
-```text
-app declares: api, server
-app uses:    api, domain
-
-unused:  server
-missing: domain
-```
-
-Think of each Mill module as a box of blocks. This plugin checks whether the
-current box asks for boxes it never opens, or quietly takes blocks through
-another box instead of depending on the right box directly.
 
 </details>
 

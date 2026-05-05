@@ -54,6 +54,77 @@ is needed only at runtime, through reflection, resources, generated code, or a
 framework convention, that edge may need an explicit suppression or a separate
 runtime dependency story.
 
+## Install
+
+`build.mill` header:
+
+```scala
+//| mvnDeps:
+//| - io.github.nguyenyou::mill-strict-deps::0.1.0
+```
+
+The `::version` shorthand appends `_mill$MILL_BIN_PLATFORM`, so on Mill 1.x it
+resolves to `mill-strict-deps_mill1`.
+
+Mix the trait into a JVM module:
+
+```scala
+import io.github.nguyenyou.millstrictdeps.StrictDepsModule
+
+object app extends ScalaModule with StrictDepsModule {
+  def scalaVersion = "3.8.3"
+  def moduleDeps = Seq(api, server)
+}
+```
+
+## Tasks
+
+```text
+./mill app.strictDepsReport
+./mill app.strictDepsJsonReport
+./mill app.strictDepsFixPlan
+./mill app.strictDepsCheck
+```
+
+Outputs:
+
+```text
+out/app/strictDepsReport.dest/strict-deps-report.md
+out/app/strictDepsJsonReport.dest/strict-deps-report.json
+out/app/strictDepsFixPlan.dest/strict-deps-fix-plan.md
+```
+
+`strictDepsCheck` fails when the module has unused direct module deps or missing
+direct module deps, depending on the module settings.
+
+## Current Scope
+
+Implemented:
+
+- Scala/JVM and Java/JVM module-dep reporting through Zinc analysis.
+- Mixed Scala/Java sources inside the same Mill `ScalaModule`.
+- Markdown report.
+- JSON fact report.
+- Suggested fix plan that does not mutate `build.mill`.
+- Check mode that fails on unused or missing direct module deps.
+
+Planned:
+
+- Maven dependency reporting.
+- Suppressions with reasons.
+- Safe `build.mill` editing after fix plans are trustworthy.
+- CI-friendly baselines.
+- Better diagnostics for resource-only, reflection, macro, and annotation
+  processor cases.
+
+## Local Development
+
+```text
+./mill strictdeps.compile
+./mill strictdeps.test
+./mill strictdeps.publishLocal
+```
+
 <details>
 <summary>How It Works In Mill</summary>
 
@@ -108,49 +179,6 @@ another box instead of depending on the right box directly.
 
 </details>
 
-## Install
-
-`build.mill` header:
-
-```scala
-//| mvnDeps:
-//| - io.github.nguyenyou::mill-strict-deps::0.1.0
-```
-
-The `::version` shorthand appends `_mill$MILL_BIN_PLATFORM`, so on Mill 1.x it
-resolves to `mill-strict-deps_mill1`.
-
-Mix the trait into a JVM module:
-
-```scala
-import io.github.nguyenyou.millstrictdeps.StrictDepsModule
-
-object app extends ScalaModule with StrictDepsModule {
-  def scalaVersion = "3.8.3"
-  def moduleDeps = Seq(api, server)
-}
-```
-
-## Tasks
-
-```text
-./mill app.strictDepsReport
-./mill app.strictDepsJsonReport
-./mill app.strictDepsFixPlan
-./mill app.strictDepsCheck
-```
-
-Outputs:
-
-```text
-out/app/strictDepsReport.dest/strict-deps-report.md
-out/app/strictDepsJsonReport.dest/strict-deps-report.json
-out/app/strictDepsFixPlan.dest/strict-deps-fix-plan.md
-```
-
-`strictDepsCheck` fails when the module has unused direct module deps or missing
-direct module deps, depending on the module settings.
-
 <details>
 <summary>Bazel To Mill Mapping</summary>
 
@@ -192,31 +220,3 @@ mutate build files only after the suggestions are trustworthy
   collects dependency facts and writes the `.jdeps` output.
 
 </details>
-
-## Current Scope
-
-Implemented:
-
-- Scala/JVM and Java/JVM module-dep reporting through Zinc analysis.
-- Mixed Scala/Java sources inside the same Mill `ScalaModule`.
-- Markdown report.
-- JSON fact report.
-- Suggested fix plan that does not mutate `build.mill`.
-- Check mode that fails on unused or missing direct module deps.
-
-Planned:
-
-- Maven dependency reporting.
-- Suppressions with reasons.
-- Safe `build.mill` editing after fix plans are trustworthy.
-- CI-friendly baselines.
-- Better diagnostics for resource-only, reflection, macro, and annotation
-  processor cases.
-
-## Local Development
-
-```text
-./mill strictdeps.compile
-./mill strictdeps.test
-./mill strictdeps.publishLocal
-```

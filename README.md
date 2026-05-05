@@ -54,7 +54,10 @@ is needed only at runtime, through reflection, resources, generated code, or a
 framework convention, that edge may need an explicit suppression or a separate
 runtime dependency story.
 
-## How It Works In Mill
+<details>
+<summary>How It Works In Mill</summary>
+
+<br>
 
 Bazel compares declared BUILD deps with `.jdeps` compiler facts. In Mill, this
 plugin compares declared module edges with Zinc analysis:
@@ -77,7 +80,12 @@ compare declared modules with used modules
 Markdown report, JSON facts, fix plan, or failing check
 ```
 
-## What It Finds
+</details>
+
+<details>
+<summary>What It Finds</summary>
+
+<br>
 
 ```text
 declared direct deps - actually used direct deps = unused direct deps
@@ -97,6 +105,8 @@ missing: domain
 Think of each Mill module as a box of blocks. This plugin checks whether the
 current box asks for boxes it never opens, or quietly takes blocks through
 another box instead of depending on the right box directly.
+
+</details>
 
 ## Install
 
@@ -141,7 +151,10 @@ out/app/strictDepsFixPlan.dest/strict-deps-fix-plan.md
 `strictDepsCheck` fails when the module has unused direct module deps or missing
 direct module deps, depending on the module settings.
 
-## Bazel To Mill Mapping
+<details>
+<summary>Bazel To Mill Mapping</summary>
+
+<br>
 
 | Bazel idea | Mill implementation |
 | --- | --- |
@@ -160,7 +173,12 @@ suggest edits third
 mutate build files only after the suggestions are trustworthy
 ```
 
-## Useful Bazel References
+</details>
+
+<details>
+<summary>Useful Bazel References</summary>
+
+<br>
 
 - [`unused_deps.go`](https://github.com/bazelbuild/buildtools/blob/master/unused_deps/unused_deps.go)
   reads javac params plus `.jdeps`, then prints Buildozer commands.
@@ -172,6 +190,8 @@ mutate build files only after the suggestions are trustworthy
   checks whether directly referenced types came from indirect jars.
 - [`DependencyModule`](https://github.com/bazelbuild/bazel/blob/master/src/java_tools/buildjar/java/com/google/devtools/build/buildjar/javac/plugins/dependency/DependencyModule.java)
   collects dependency facts and writes the `.jdeps` output.
+
+</details>
 
 ## Current Scope
 

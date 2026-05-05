@@ -14,7 +14,10 @@ object StrictDepsAnalyzer {
       ignoredModuleNames: Set[String]
   ): StrictDepsReport = {
     val currentAnalysis = readAnalysis(currentAnalysisFile)
-    val usedExternalClasses = currentAnalysis.relations.allExternalDeps.toSeq.sorted.distinct
+    val usedExternalClasses = currentAnalysis.relations.allExternalDeps.toSeq
+      .map(normalizeUsedClassName)
+      .sorted
+      .distinct
     val moduleClasses = transitiveModules.map { module =>
       module.moduleName -> definedClasses(readAnalysis(module.analysisFile))
     }.filter { case (_, classes) => classes.nonEmpty }
@@ -105,6 +108,10 @@ object StrictDepsAnalyzer {
 
   private def definedClasses(analysis: Analysis): Set[String] = {
     analysis.relations.classes._2s.toSet
+  }
+
+  private def normalizeUsedClassName(className: String): String = {
+    className.stripSuffix("$")
   }
 
   private def percent(numerator: Int, denominator: Int): Double = {

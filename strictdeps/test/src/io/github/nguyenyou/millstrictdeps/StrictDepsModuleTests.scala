@@ -79,6 +79,8 @@ object StrictDepsModuleTests extends TestSuite {
 
         assert(json("moduleName").str == "app")
         assert(json("hasProblems").bool)
+        assert(json("summary")("usedDirectModuleDeps").num == 2)
+        assert(!json("unusedDirectModuleDeps").arr.exists(_.str == "api"))
         assert(json("unusedDirectModuleDeps").arr.exists(_.str == "server"))
         assert(
           json("missingDirectModuleDeps").arr.exists { usage =>
@@ -87,8 +89,15 @@ object StrictDepsModuleTests extends TestSuite {
         )
         assert(
           json("usedDirectModuleDeps").arr.exists { usage =>
+            usage("moduleName").str == "api" &&
+            usage("usedClasses").arr.exists(_.str == "com.example.api.Api")
+          }
+        )
+        assert(
+          json("usedDirectModuleDeps").arr.exists { usage =>
             usage("moduleName").str == "helper" &&
-            usage("usedClasses").arr.exists(_.str == "com.example.helper.Helper")
+            usage("usedClasses").arr.exists(_.str == "com.example.helper.Helper") &&
+            usage("usedClasses").arr.exists(_.str == "com.example.helper.ScalaHelper")
           }
         )
         assert(

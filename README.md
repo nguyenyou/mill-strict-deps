@@ -162,6 +162,76 @@ out/appA/strictDepsFixPlan.dest/strict-deps-fix-plan.md
 direct module deps, depending on the module settings.
 
 <details>
+<summary>How To Read The Report Numbers</summary>
+
+<br>
+
+The summary numbers count dependency edges, not source files.
+
+Think of one report as a receipt for one module:
+
+```text
+module under test: appA
+
+declared direct boxes:  appB, uiWidget, logging
+classes actually used:  uiWidget.Button, logging.Logger, theme.Color
+```
+
+The report asks four questions:
+
+| metric | what it counts | what it means |
+| --- | ---: | --- |
+| `used direct module deps` | direct internal modules that contributed at least one used class | Good. The module declared the box, and the compiler saw code use pieces from that box. |
+| `unused direct module deps` | direct internal modules with no used classes recorded by Zinc | Suspicious. The module declared the box, but the compiler did not see source code use classes from it. This is often removable, unless the edge is needed for resources, reflection, generated code, framework conventions, or another non-classpath reason. |
+| `missing direct module deps` | transitive internal modules whose classes were used directly | Bad graph shape. The source code used pieces from a box that was only available through another box. Add this module as a direct dep. |
+| `used library classpath entries` | external jars/classpath entries with usage recorded by Zinc | Informational today. External Maven deps are already compiled, so the current plugin does not fail on these. |
+
+The detailed sections then explain the summary.
+
+`Used Direct Module Deps` means:
+
+```text
+appA -> uiWidget
+
+appA source mentions uiWidget.Button
+```
+
+That is a truthful edge.
+
+`Unused Direct Module Deps` means:
+
+```text
+appA -> appB
+
+appA source did not mention classes from appB
+```
+
+That edge may be overpull. Remove it if compilation and runtime behavior still
+make sense.
+
+`Missing Direct Module Deps` means:
+
+```text
+appA -> appB -> uiWidget
+
+appA source mentions uiWidget.Button
+```
+
+The code compiles because `appB` brings `uiWidget` along for the ride, but the
+graph is hiding what `appA` really needs. The fix is usually:
+
+```text
+appA -> uiWidget
+```
+
+In the detail tables, `used classes` is the number of class names from that
+upstream module that Zinc saw the current module touch. `sample` shows a capped
+list of examples; the cap is controlled by `strictDepsMaxClassesPerModule`
+(default: `12`).
+
+</details>
+
+<details>
 <summary>Current Scope</summary>
 
 <br>

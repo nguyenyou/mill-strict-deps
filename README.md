@@ -50,6 +50,49 @@ Think of each Mill module as a box of blocks. This plugin checks whether the
 current box asks for boxes it never opens, or quietly takes blocks through
 another box instead of depending on the right box directly.
 
+## What Strict Deps Means
+
+In a Mill JVM build, strict deps means:
+
+```text
+If module app directly mentions a class from module domain,
+then app should directly declare domain in moduleDeps or compileModuleDeps.
+```
+
+It should not rely on `domain` only because another dependency happens to bring
+it in transitively.
+
+```text
+app
+ |
+ v
+api
+ |
+ v
+domain
+```
+
+If `app` source code uses `domain.User`, then this is not strict enough:
+
+```scala
+object app extends ScalaModule {
+  def moduleDeps = Seq(api)
+}
+```
+
+The strict version is:
+
+```scala
+object app extends ScalaModule {
+  def moduleDeps = Seq(api, domain)
+}
+```
+
+The rule is about compile-time source usage, not runtime packaging. If a module
+is needed only at runtime, through reflection, resources, generated code, or a
+framework convention, that edge may need an explicit suppression or a separate
+runtime dependency story.
+
 ## Install
 
 `build.mill` header:

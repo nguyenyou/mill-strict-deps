@@ -11,6 +11,38 @@ declared direct deps
 
 `mill-strict-deps` implements that idea for the Mill build tool.
 
+## Why This Matters
+
+In a large Mill build, an engineer may make `appA` depend on `appB` just to use
+one UI component that is available through `appB`:
+
+```text
+appA
+ |
+ v
+appB
+ |
+ v
+uiWidget
+```
+
+That works, but it makes `appA` compile against the larger `appB` module. If
+`appA` only truly uses the UI widget, the cleaner dependency shape is:
+
+```text
+appA     appB
+ |        |
+ v        v
+uiWidget
+```
+
+`mill-strict-deps` can spot this pattern. It reports `appB` as an unused direct
+module dependency and `uiWidget` as the missing direct dependency. Then `appA`
+can depend on the smaller reusable module instead of the whole app.
+
+The result is a smaller compile classpath and a build graph that matches what
+the source code actually uses.
+
 ## What's "Strict Deps"?
 
 In a Mill JVM build, strict deps means:

@@ -17,6 +17,7 @@ object StrictDepsMarkdownRenderer {
     builder.append(s"| missing direct module deps | ${report.missingDirectModuleDeps.size} |\n")
     builder.append(s"| used library classpath entries | ${report.usedLibraryClasspathEntries.size} |\n\n")
 
+    renderUsageWeights(builder, report.dependencyUsageWeights, maxClassesPerModule)
     renderUnused(builder, report.unusedDirectModuleDeps)
     renderUsageSection(
       builder = builder,
@@ -52,6 +53,50 @@ object StrictDepsMarkdownRenderer {
     } else {
       modules.foreach { moduleName =>
         builder.append(s"- `${escape(moduleName)}`\n")
+      }
+      builder.append("\n")
+    }
+  }
+
+  private def renderUsageWeights(
+      builder: StringBuilder,
+      weights: Seq[StrictDepsModuleUsageWeight],
+      maxClassesPerModule: Int
+  ): Unit = {
+    builder.append("## Dependency Usage Weight\n\n")
+    builder.append(
+      "These numbers are advisory. They count distinct dependency classes touched by this module.\n\n"
+    )
+
+    if (weights.isEmpty) {
+      builder.append("_No internal dependency class usage recorded by Zinc._\n\n")
+    } else {
+      builder.append(
+        "| module | relationship | used classes | share of this module's internal usage | dependency classes touched | sample |\n"
+      )
+      builder.append("| --- | --- | ---: | ---: | ---: | --- |\n")
+      weights.foreach { weight =>
+        val relationship =
+          if (weight.declaredDirect) {
+            "direct"
+          } else {
+            "transitive"
+          }
+        val touched =
+          s"${weight.usedClassCount} / ${weight.dependencyClassCount} (${formatPercent(weight.dependencyTouchedPercent)})"
+        val sample = weight.usedClasses
+          .take(maxClassesPerModule)
+          .map(className => s"`$className`")
+          .mkString("<br>")
+        val suffix =
+          if (weight.usedClasses.size > maxClassesPerModule) {
+            s"<br>... ${weight.usedClasses.size - maxClassesPerModule} more"
+          } else {
+            ""
+          }
+        builder.append(
+          s"| `${escape(weight.moduleName)}` | $relationship | ${weight.usedClassCount} | ${formatPercent(weight.currentModuleUsagePercent)} | $touched | $sample$suffix |\n"
+        )
       }
       builder.append("\n")
     }
@@ -95,5 +140,8 @@ object StrictDepsMarkdownRenderer {
   private def escape(value: String): String = {
     value.replace("|", "\\|")
   }
-}
 
+  private def formatPercent(value: Double): String = {
+    f"$value%.1f%%"
+  }
+}

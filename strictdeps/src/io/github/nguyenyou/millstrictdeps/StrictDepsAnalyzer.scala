@@ -1,5 +1,7 @@
 package io.github.nguyenyou.millstrictdeps
 
+import scala.math.round
+
 import sbt.internal.inc.Analysis
 import sbt.internal.inc.FileAnalysisStore
 
@@ -16,6 +18,7 @@ object StrictDepsAnalyzer {
     val moduleClasses = transitiveModules.map { module =>
       module.moduleName -> definedClasses(readAnalysis(module.analysisFile))
     }.filter { case (_, classes) => classes.nonEmpty }
+    val moduleClassesByName = moduleClasses.toMap
 
     val ownersByClass = moduleClasses
       .flatMap { case (moduleName, classes) =>
@@ -39,6 +42,25 @@ object StrictDepsAnalyzer {
       .toMap
 
     val ignored = ignoredModuleNames
+    val relevantUsedClassesByModule = usedClassesByModule.filterNot { case (moduleName, _) =>
+      ignored.contains(moduleName)
+    }
+    val totalInternalUsedClassRefs = relevantUsedClassesByModule.values.map(_.size).sum
+
+    val dependencyUsageWeights = relevantUsedClassesByModule.toSeq
+      .sortBy { case (moduleName, classes) => (-classes.size, moduleName) }
+      .map { case (moduleName, classes) =>
+        val dependencyClassCount = moduleClassesByName.getOrElse(moduleName, Set.empty).size
+        StrictDepsModuleUsageWeight(
+          moduleName = moduleName,
+          declaredDirect = directModuleNames.contains(moduleName),
+          usedClasses = classes,
+          dependencyClassCount = dependencyClassCount,
+          currentModuleUsagePercent = percent(classes.size, totalInternalUsedClassRefs),
+          dependencyTouchedPercent = percent(classes.size, dependencyClassCount)
+        )
+      }
+
     val usedDirectModuleDeps = directModuleNames.toSeq.sorted
       .filter(moduleName => usedClassesByModule.contains(moduleName))
       .filterNot(ignored.contains)
@@ -63,7 +85,8 @@ object StrictDepsAnalyzer {
       usedDirectModuleDeps = usedDirectModuleDeps,
       unusedDirectModuleDeps = unusedDirectModuleDeps,
       missingDirectModuleDeps = missingDirectModuleDeps,
-      usedLibraryClasspathEntries = usedLibraryClasspathEntries
+      usedLibraryClasspathEntries = usedLibraryClasspathEntries,
+      dependencyUsageWeights = dependencyUsageWeights
     )
   }
 
@@ -82,5 +105,13 @@ object StrictDepsAnalyzer {
 
   private def definedClasses(analysis: Analysis): Set[String] = {
     analysis.relations.classes._2s.toSet
+  }
+
+  private def percent(numerator: Int, denominator: Int): Double = {
+    if (denominator == 0) {
+      0.0
+    } else {
+      round(numerator.toDouble * 1000.0 / denominator).toDouble / 10.0
+    }
   }
 }

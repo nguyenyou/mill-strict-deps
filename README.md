@@ -118,6 +118,16 @@ remove appB-admin
 add uiWidget
 ```
 
+It also reports advisory dependency usage weight:
+
+```text
+used classes from dependency / all internal dependency classes used by this module
+used classes from dependency / all classes defined by that dependency
+```
+
+That helps separate "this module leans heavily on core" from "this module only
+touches one class through a large dependency".
+
 ## Install
 
 `build.mill` header:
@@ -184,6 +194,7 @@ The report asks four questions:
 | `used direct module deps` | direct internal modules that contributed at least one used class | Good. The module declared the box, and the compiler saw code use pieces from that box. |
 | `unused direct module deps` | direct internal modules with no used classes recorded by Zinc | Suspicious. The module declared the box, but the compiler did not see source code use classes from it. This is often removable, unless the edge is needed for resources, reflection, generated code, framework conventions, or another non-classpath reason. |
 | `missing direct module deps` | transitive internal modules whose classes were used directly | Bad graph shape. The source code used pieces from a box that was only available through another box. Add this module as a direct dep. |
+| `dependency usage weight` | used classes per internal dependency, with percentages | Advisory coupling signal. It shows how much of the current module's internal dependency usage comes from each dependency, and how much of that dependency's class surface was touched. |
 | `used library classpath entries` | external jars/classpath entries with usage recorded by Zinc | Informational today. External Maven deps are already compiled, so the current plugin does not fail on these. |
 
 The detailed sections then explain the summary.

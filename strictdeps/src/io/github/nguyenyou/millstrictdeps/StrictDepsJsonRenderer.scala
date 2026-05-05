@@ -22,6 +22,7 @@ object StrictDepsJsonRenderer {
       "usedDirectModuleDeps" -> Arr.from(report.usedDirectModuleDeps.map(usageJson)),
       "unusedDirectModuleDeps" -> stringArray(report.unusedDirectModuleDeps),
       "missingDirectModuleDeps" -> Arr.from(report.missingDirectModuleDeps.map(usageJson)),
+      "dependencyUsageWeights" -> Arr.from(report.dependencyUsageWeights.map(weightJson)),
       "usedLibraryClasspathEntries" -> stringArray(report.usedLibraryClasspathEntries)
     )
   }
@@ -31,6 +32,18 @@ object StrictDepsJsonRenderer {
       "moduleName" -> Str(usage.moduleName),
       "usedClassCount" -> Num(usage.usedClassCount),
       "usedClasses" -> stringArray(usage.usedClasses)
+    )
+  }
+
+  private def weightJson(weight: StrictDepsModuleUsageWeight): Value = {
+    Obj(
+      "moduleName" -> Str(weight.moduleName),
+      "declaredDirect" -> Bool(weight.declaredDirect),
+      "usedClassCount" -> Num(weight.usedClassCount),
+      "dependencyClassCount" -> Num(weight.dependencyClassCount),
+      "currentModuleUsagePercent" -> Num(weight.currentModuleUsagePercent),
+      "dependencyTouchedPercent" -> Num(weight.dependencyTouchedPercent),
+      "usedClasses" -> stringArray(weight.usedClasses)
     )
   }
 

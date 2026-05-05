@@ -91,6 +91,22 @@ object StrictDepsModuleTests extends TestSuite {
             usage("usedClasses").arr.exists(_.str == "com.example.helper.Helper")
           }
         )
+        assert(
+          json("dependencyUsageWeights").arr.exists { weight =>
+            weight("moduleName").str == "helper" &&
+            weight("declaredDirect").bool &&
+            weight("usedClassCount").num > 0 &&
+            weight("currentModuleUsagePercent").num > 0 &&
+            weight("dependencyTouchedPercent").num > 0
+          }
+        )
+        assert(
+          json("dependencyUsageWeights").arr.exists { weight =>
+            weight("moduleName").str == "domain" &&
+            !weight("declaredDirect").bool &&
+            weight("usedClasses").arr.exists(_.str == "com.example.domain.User")
+          }
+        )
 
         val fixPlanResult = eval(StrictDepsFixtureBuild.app.strictDepsFixPlan).fold(
           failure => throw new Exception(failure.toString),
@@ -119,6 +135,13 @@ object StrictDepsModuleTests extends TestSuite {
         assert(
           json("missingDirectModuleDeps").arr.exists { usage =>
             usage("moduleName").str == "uiWidget"
+          }
+        )
+        assert(
+          json("dependencyUsageWeights").arr.exists { weight =>
+            weight("moduleName").str == "uiWidget" &&
+            !weight("declaredDirect").bool &&
+            weight("usedClassCount").num > 0
           }
         )
 

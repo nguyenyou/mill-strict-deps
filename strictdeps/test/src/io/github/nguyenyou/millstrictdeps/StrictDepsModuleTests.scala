@@ -2,6 +2,7 @@ package io.github.nguyenyou.millstrictdeps
 
 import mill.*
 import mill.api.Discover
+import mill.api.daemon.ExecResult
 import mill.scalalib.ScalaModule
 import mill.testkit.TestRootModule
 import mill.testkit.UnitTester
@@ -31,6 +32,20 @@ object StrictDepsFixtureBuild extends TestRootModule {
   object app extends ScalaModule with StrictDepsModule {
     def scalaVersion = sharedScalaVersion
     override def moduleDeps = Seq(api, server, helper)
+  }
+
+  object uiWidget extends ScalaModule {
+    def scalaVersion = sharedScalaVersion
+  }
+
+  object appB extends ScalaModule {
+    def scalaVersion = sharedScalaVersion
+    override def moduleDeps = Seq(uiWidget)
+  }
+
+  object appA extends ScalaModule with StrictDepsModule {
+    def scalaVersion = sharedScalaVersion
+    override def moduleDeps = Seq(appB)
   }
 
   lazy val millDiscover = Discover[this.type]
@@ -86,6 +101,36 @@ object StrictDepsModuleTests extends TestSuite {
         assert(fixPlan.contains("Add `domain`"))
         assert(fixPlan.contains("Remove `server`"))
         assert(fixPlan.contains("does not mutate `build.mill`"))
+      }
+    }
+
+    test("fails when appA depends on appB only to use uiWidget symbols") {
+      val resourceFolder = os.Path(sys.env("MILL_TEST_RESOURCE_DIR"))
+      UnitTester(StrictDepsFixtureBuild, resourceFolder / "strict-deps-project").scoped { eval =>
+        val jsonResult = eval(StrictDepsFixtureBuild.appA.strictDepsJsonReport).fold(
+          failure => throw new Exception(failure.toString),
+          identity
+        )
+        val json = read(os.read(jsonResult.value.path))
+
+        assert(json("moduleName").str == "appA")
+        assert(json("hasProblems").bool)
+        assert(json("unusedDirectModuleDeps").arr.exists(_.str == "appB"))
+        assert(
+          json("missingDirectModuleDeps").arr.exists { usage =>
+            usage("moduleName").str == "uiWidget"
+          }
+        )
+
+        eval(StrictDepsFixtureBuild.appA.strictDepsCheck()) match {
+          case Left(failure: ExecResult.Failure[?]) =>
+            assert(failure.msg.contains("unused direct module deps: appB"))
+            assert(failure.msg.contains("missing direct module deps: uiWidget"))
+          case Left(failure) =>
+            throw new Exception(s"Unexpected strictDepsCheck failure: $failure")
+          case Right(_) =>
+            throw new Exception("strictDepsCheck unexpectedly passed")
+        }
       }
     }
   }

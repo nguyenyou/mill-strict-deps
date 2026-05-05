@@ -37,13 +37,17 @@ object app extends ScalaModule with StrictDepsModule {
 
 ```text
 ./mill app.strictDepsReport
+./mill app.strictDepsJsonReport
+./mill app.strictDepsFixPlan
 ./mill app.strictDepsCheck
 ```
 
-`strictDepsReport` writes:
+The report tasks write:
 
 ```text
 out/app/strictDepsReport.dest/strict-deps-report.md
+out/app/strictDepsJsonReport.dest/strict-deps-report.json
+out/app/strictDepsFixPlan.dest/strict-deps-fix-plan.md
 ```
 
 The report currently covers Mill module dependencies:
@@ -97,9 +101,9 @@ The Mill version maps those ideas like this:
 | Bazel idea | Mill strict-deps equivalent |
 | --- | --- |
 | `--direct_dependencies` from the Java compile action | `moduleDeps` declared on the Mill module |
-| `.jdeps` proto containing compile-time jar usage | Zinc analysis containing used class relations |
+| `.jdeps` proto containing compile-time jar usage | `strictDepsJsonReport` from Zinc analysis |
 | strict-deps compiler plugin detects indirect jars during javac | report phase detects used transitive modules from Zinc analysis |
-| `unused_deps` emits Buildozer commands | future fixer can emit suggested `build.mill` edits |
+| `unused_deps` emits Buildozer commands | `strictDepsFixPlan` emits suggested `build.mill` edits |
 
 Implementation details worth learning from Bazel:
 
@@ -132,14 +136,15 @@ Implemented first:
 
 - Scala/JVM and Java/JVM module-dep reporting through Zinc analysis.
 - Mixed Scala/Java sources inside the same Mill `ScalaModule`.
-- Report mode.
+- Markdown and JSON report modes.
+- Suggested fix-plan mode that does not mutate `build.mill`.
 - Check mode that fails on unused or missing direct module deps.
 
 Planned:
 
 - Maven dependency reporting.
 - Suppressions with reasons.
-- JSON output.
+- Safe `build.mill` editing after fix plans are trustworthy.
 - CI-friendly baselines.
 - Better diagnostics for resource-only, reflection, macro, and annotation
   processor cases.

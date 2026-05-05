@@ -42,6 +42,35 @@ trait StrictDepsModule extends ScalaModule { outer =>
     PathRef(out)
   }
 
+  def strictDepsJsonReport: T[PathRef] = Task {
+    val report = analyzeStrictDeps()()
+    val out = Task.dest / "strict-deps-report.json"
+    os.write.over(
+      out,
+      StrictDepsJsonRenderer.render(
+        moduleName = moduleSegments.render,
+        report = report
+      )
+    )
+    Task.log.info(s"strictDepsJsonReport -> $out")
+    PathRef(out)
+  }
+
+  def strictDepsFixPlan: T[PathRef] = Task {
+    val report = analyzeStrictDeps()()
+    val out = Task.dest / "strict-deps-fix-plan.md"
+    os.write.over(
+      out,
+      StrictDepsFixPlanRenderer.render(
+        moduleName = moduleSegments.render,
+        report = report,
+        maxClassesPerModule = strictDepsMaxClassesPerModule()
+      )
+    )
+    Task.log.info(s"strictDepsFixPlan -> $out")
+    PathRef(out)
+  }
+
   def strictDepsCheck(): Command[Unit] = Task.Command {
     val report = analyzeStrictDeps()()
     val failures = Seq(

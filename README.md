@@ -1,14 +1,54 @@
 # mill-strict-deps
 
-A Mill plugin that reads Zinc analysis and reports JVM module dependency shape:
+[Bazel's Strict Java Deps and `unused_deps`](https://blog.bazel.build/2017/06/28/sjd-unused_deps.html)
+shows a simple idea:
+
+```text
+declared direct deps
+  + compiler facts about what was actually used
+  -> unused deps, missing direct deps, and fix suggestions
+```
+
+`mill-strict-deps` implements that idea for the Mill build tool.
+
+Instead of Bazel BUILD targets, it reads Mill `moduleDeps`. Instead of Bazel
+`.jdeps`, it reads Zinc analysis from Mill JVM modules. The goal is the same:
+help each module declare the dependencies it actually uses, no more and no
+less.
+
+```text
+Mill moduleDeps
+  |
+  v
+Zinc analysis says which upstream classes were touched
+  |
+  v
+compare declared modules with used modules
+  |
+  v
+Markdown report, JSON facts, fix plan, or failing check
+```
+
+## What It Finds
 
 ```text
 declared direct deps - actually used direct deps = unused direct deps
 actually used transitive deps - declared direct deps = missing direct deps
 ```
 
-It is a report-first tool. It helps find build graph waste before enforcing it
-in CI.
+Example:
+
+```text
+app declares: api, server
+app uses:    api, domain
+
+unused:  server
+missing: domain
+```
+
+Think of each Mill module as a box of blocks. This plugin checks whether the
+current box asks for boxes it never opens, or quietly takes blocks through
+another box instead of depending on the right box directly.
 
 ## Install
 
@@ -42,7 +82,7 @@ object app extends ScalaModule with StrictDepsModule {
 ./mill app.strictDepsCheck
 ```
 
-The report tasks write:
+Outputs:
 
 ```text
 out/app/strictDepsReport.dest/strict-deps-report.md
@@ -50,74 +90,29 @@ out/app/strictDepsJsonReport.dest/strict-deps-report.json
 out/app/strictDepsFixPlan.dest/strict-deps-fix-plan.md
 ```
 
-The report currently covers Mill module dependencies:
+`strictDepsCheck` fails when the module has unused direct module deps or missing
+direct module deps, depending on the module settings.
 
-| section | meaning |
+## Bazel To Mill Mapping
+
+| Bazel idea | Mill implementation |
 | --- | --- |
-| unused direct module deps | Direct deps declared by this module but not used by its compiled sources |
-| missing direct module deps | Transitive deps whose classes are used without being declared directly |
-| used direct module deps | Direct deps with classes referenced by this module |
-
-## Mental Model
-
-```text
-app
- |
- v
-declared boxes
- |
- v
-Zinc analysis says which upstream classes were actually touched
- |
- v
-compare declared boxes with touched boxes
-```
-
-This plugin does not redesign your modules. It is the scale on the sorting
-table: it tells you which boxes were packed but not consumed, and which boxes
-were consumed through someone else's box.
-
-## Prior Art
-
-This project follows the same basic idea as Bazel's
-[Strict Java Deps and `unused_deps`](https://blog.bazel.build/2017/06/28/sjd-unused_deps.html).
-Bazel's Java flow has four useful parts:
-
-```text
-BUILD deps
-  |
-  v
-javac params say which jars are direct deps
-  |
-  v
-compiler records which jars were actually used into .jdeps
-  |
-  v
-unused_deps compares both lists and prints buildozer fixes
-```
-
-The Mill version maps those ideas like this:
-
-| Bazel idea | Mill strict-deps equivalent |
-| --- | --- |
-| `--direct_dependencies` from the Java compile action | `moduleDeps` declared on the Mill module |
-| `.jdeps` proto containing compile-time jar usage | `strictDepsJsonReport` from Zinc analysis |
-| strict-deps compiler plugin detects indirect jars during javac | report phase detects used transitive modules from Zinc analysis |
+| `--direct_dependencies` from the Java compile action | `moduleDeps` and `compileModuleDeps` declared on the Mill module |
+| `.jdeps` proto containing compile-time jar usage | `strictDepsJsonReport` generated from Zinc analysis |
+| strict-deps compiler plugin detects indirect jars during javac | analyzer detects used transitive modules from Zinc relations |
 | `unused_deps` emits Buildozer commands | `strictDepsFixPlan` emits suggested `build.mill` edits |
 
-Implementation details worth learning from Bazel:
+The implementation copies Bazel's architecture, not its Java-specific compiler
+plugin:
 
-- Keep the compiler classpath broad enough that diagnosis can run without
-  breaking ordinary symbol resolution first.
-- Record dependency usage as structured data, not console text.
-- Separate detection from editing: first produce facts, then produce safe fix
-  commands.
-- Include enough ownership information to say exactly which dependency to add
-  or remove.
-- Treat generated code, reflection, annotation processors, and runtime-only
-  dependencies as explicit edge cases, not afterthoughts.
+```text
+detect facts first
+report facts second
+suggest edits third
+mutate build files only after the suggestions are trustworthy
+```
 
-Useful source references:
+## Useful Bazel References
 
 - [`unused_deps.go`](https://github.com/bazelbuild/buildtools/blob/master/unused_deps/unused_deps.go)
   reads javac params plus `.jdeps`, then prints Buildozer commands.
@@ -132,12 +127,13 @@ Useful source references:
 
 ## Current Scope
 
-Implemented first:
+Implemented:
 
 - Scala/JVM and Java/JVM module-dep reporting through Zinc analysis.
 - Mixed Scala/Java sources inside the same Mill `ScalaModule`.
-- Markdown and JSON report modes.
-- Suggested fix-plan mode that does not mutate `build.mill`.
+- Markdown report.
+- JSON fact report.
+- Suggested fix plan that does not mutate `build.mill`.
 - Check mode that fails on unused or missing direct module deps.
 
 Planned:

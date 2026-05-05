@@ -5,6 +5,7 @@ package build
 import mill.*
 import mill.scalalib.*
 import mill.scalalib.publish.*
+import mill.util.VcsVersion
 
 object Versions {
   val mill = "1.1.6-7-15943a"
@@ -15,14 +16,25 @@ object Versions {
   val plugin = "0.1.0"
 }
 
+object Constants {
+  val projectName = "mill-strict-deps"
+  val githubUsername = "nguyenyou"
+  val author = "Tu Nguyen"
+  val organization = "io.github.nguyenyou"
+  val repoUrl = s"https://github.com/$githubUsername/$projectName"
+  val githubProfile = s"https://github.com/$githubUsername"
+  val description = "Mill plugin for strict JVM dependency reports"
+}
+
 /**
  * Mill plugin that adds strict dependency reporting to JVM modules.
  *
  * Publish locally with `./mill strictdeps.publishLocal`.
+ * Publish to Sonatype Central with `./mill strictdeps.publishSonatypeCentral`.
  */
-object strictdeps extends ScalaModule with PublishModule {
+object strictdeps extends ScalaModule with SonatypeCentralPublishModule {
   def scalaVersion = Versions.scala
-  def artifactName = "mill-strict-deps"
+  def artifactName = Constants.projectName
   def platformSuffix = "_mill1"
 
   def mvnDeps = Task {
@@ -49,13 +61,15 @@ object strictdeps extends ScalaModule with PublishModule {
   }
 
   def pomSettings = PomSettings(
-    description = "Mill plugin for strict JVM dependency reports",
-    organization = "io.github.nguyenyou",
-    url = "https://github.com/nguyenyou/mill-strict-deps",
+    description = Constants.description,
+    organization = Constants.organization,
+    url = Constants.repoUrl,
     licenses = Seq(License.MIT),
-    versionControl = VersionControl.github("nguyenyou", "mill-strict-deps"),
-    developers = Seq(Developer("nguyenyou", "nguyenyou", "https://github.com/nguyenyou"))
+    versionControl = VersionControl.github(Constants.githubUsername, Constants.projectName),
+    developers = Seq(
+      Developer(Constants.githubUsername, Constants.author, Constants.githubProfile)
+    )
   )
 
-  def publishVersion = Versions.plugin
+  def publishVersion = VcsVersion.vcsState().format(noTagFallback = Versions.plugin)
 }

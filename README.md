@@ -197,6 +197,48 @@ Planned:
 ./mill strictdeps.publishLocal
 ```
 
+## Publishing
+
+This project is configured for Sonatype Central publishing through Mill's
+`SonatypeCentralPublishModule`.
+
+Local Ivy publish:
+
+```text
+./mill strictdeps.publishLocal
+```
+
+Sonatype Central publish:
+
+```text
+./mill strictdeps.publishSonatypeCentral
+```
+
+Mill reads Sonatype credentials from:
+
+```text
+MILL_SONATYPE_USERNAME
+MILL_SONATYPE_PASSWORD
+```
+
+Release publishing also needs signing credentials:
+
+```text
+MILL_PGP_SECRET_BASE64
+MILL_PGP_PASSPHRASE
+```
+
+Mill can create and print the signing env vars with:
+
+```text
+./mill mill.scalalib.SonatypeCentralPublishModule/initGpgKeys
+```
+
+The published version is derived from git tags with `0.1.0` as the no-tag
+fallback. Tag a release, for example `v0.1.0`, when you want Sonatype Central
+to receive exactly `0.1.0`; untagged or dirty commits include git metadata in
+the version.
+
 <details>
 <summary>How It Works In Mill</summary>
 

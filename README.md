@@ -146,9 +146,17 @@ direct module deps, depending on the module settings.
 
 ## Current Scope
 
+This project currently focuses on internal Mill module dependencies only:
+`moduleDeps` and `compileModuleDeps`.
+
+That is intentional. Internal deps are where a broad edge can force Mill to
+compile many source files that the current module does not truly need. External
+dependencies are already published as compiled `.class` files, so they usually
+do not create the same source-compilation cost.
+
 Implemented:
 
-- Scala/JVM and Java/JVM module-dep reporting through Zinc analysis.
+- Internal Scala/JVM and Java/JVM module-dep reporting through Zinc analysis.
 - Mixed Scala/Java sources inside the same Mill `ScalaModule`.
 - Markdown report.
 - JSON fact report.
@@ -157,7 +165,7 @@ Implemented:
 
 Planned:
 
-- Maven dependency reporting.
+- External Maven dependency reporting, later.
 - Suppressions with reasons.
 - Safe `build.mill` editing after fix plans are trustworthy.
 - CI-friendly baselines.

@@ -131,6 +131,7 @@ Useful source references:
 Implemented first:
 
 - Scala/JVM and Java/JVM module-dep reporting through Zinc analysis.
+- Mixed Scala/Java sources inside the same Mill `ScalaModule`.
 - Report mode.
 - Check mode that fails on unused or missing direct module deps.
 

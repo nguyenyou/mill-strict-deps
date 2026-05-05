@@ -23,9 +23,13 @@ object StrictDepsFixtureBuild extends TestRootModule {
     def scalaVersion = sharedScalaVersion
   }
 
+  object helper extends ScalaModule {
+    def scalaVersion = sharedScalaVersion
+  }
+
   object app extends ScalaModule with StrictDepsModule {
     def scalaVersion = sharedScalaVersion
-    override def moduleDeps = Seq(api, server)
+    override def moduleDeps = Seq(api, server, helper)
   }
 
   lazy val millDiscover = Discover[this.type]
@@ -48,6 +52,8 @@ object StrictDepsModuleTests extends TestSuite {
         assert(markdown.contains("domain"))
         assert(markdown.contains("Used Direct Module Deps"))
         assert(markdown.contains("api"))
+        assert(markdown.contains("helper"))
+        assert(markdown.contains("com.example.helper.Helper"))
       }
     }
   }

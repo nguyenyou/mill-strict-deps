@@ -11,45 +11,6 @@ declared direct deps
 
 `mill-strict-deps` implements that idea for the Mill build tool.
 
-Instead of Bazel BUILD targets, it reads Mill `moduleDeps`. Instead of Bazel
-`.jdeps`, it reads Zinc analysis from Mill JVM modules. The goal is the same:
-help each module declare the dependencies it actually uses, no more and no
-less.
-
-```text
-Mill moduleDeps
-  |
-  v
-Zinc analysis says which upstream classes were touched
-  |
-  v
-compare declared modules with used modules
-  |
-  v
-Markdown report, JSON facts, fix plan, or failing check
-```
-
-## What It Finds
-
-```text
-declared direct deps - actually used direct deps = unused direct deps
-actually used transitive deps - declared direct deps = missing direct deps
-```
-
-Example:
-
-```text
-app declares: api, server
-app uses:    api, domain
-
-unused:  server
-missing: domain
-```
-
-Think of each Mill module as a box of blocks. This plugin checks whether the
-current box asks for boxes it never opens, or quietly takes blocks through
-another box instead of depending on the right box directly.
-
 ## What's "Strict Deps"?
 
 In a Mill JVM build, strict deps means:
@@ -92,6 +53,50 @@ The rule is about compile-time source usage, not runtime packaging. If a module
 is needed only at runtime, through reflection, resources, generated code, or a
 framework convention, that edge may need an explicit suppression or a separate
 runtime dependency story.
+
+## How It Works In Mill
+
+Bazel compares declared BUILD deps with `.jdeps` compiler facts. In Mill, this
+plugin compares declared module edges with Zinc analysis:
+
+- declared edges come from `moduleDeps` and `compileModuleDeps`
+- usage facts come from the Zinc analysis file produced by Mill compilation
+- output goes to a Markdown report, a JSON fact file, a fix plan, or a failing
+  check
+
+```text
+Mill moduleDeps / compileModuleDeps
+  |
+  v
+Zinc analysis says which upstream classes were touched
+  |
+  v
+compare declared modules with used modules
+  |
+  v
+Markdown report, JSON facts, fix plan, or failing check
+```
+
+## What It Finds
+
+```text
+declared direct deps - actually used direct deps = unused direct deps
+actually used transitive deps - declared direct deps = missing direct deps
+```
+
+Example:
+
+```text
+app declares: api, server
+app uses:    api, domain
+
+unused:  server
+missing: domain
+```
+
+Think of each Mill module as a box of blocks. This plugin checks whether the
+current box asks for boxes it never opens, or quietly takes blocks through
+another box instead of depending on the right box directly.
 
 ## Install
 

@@ -197,7 +197,10 @@ Planned:
 ./mill strictdeps.publishLocal
 ```
 
-## Publishing
+<details>
+<summary>Publishing</summary>
+
+<br>
 
 This project is configured for Sonatype Central publishing through Mill's
 `SonatypeCentralPublishModule`.
@@ -238,6 +241,8 @@ The published version is derived from git tags with `0.1.0` as the no-tag
 fallback. Tag a release, for example `v0.1.0`, when you want Sonatype Central
 to receive exactly `0.1.0`; untagged or dirty commits include git metadata in
 the version.
+
+</details>
 
 <details>
 <summary>How It Works In Mill</summary>

@@ -50,7 +50,7 @@ Think of each Mill module as a box of blocks. This plugin checks whether the
 current box asks for boxes it never opens, or quietly takes blocks through
 another box instead of depending on the right box directly.
 
-## What Strict Deps Means
+## What's "Strict Deps"?
 
 In a Mill JVM build, strict deps means:
 

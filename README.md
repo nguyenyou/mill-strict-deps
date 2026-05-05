@@ -63,36 +63,36 @@ the source code actually uses.
 In a Mill JVM build, strict deps means:
 
 ```text
-If module app directly mentions a class from module domain,
-then app should directly declare domain in moduleDeps or compileModuleDeps.
+If appA directly mentions a class from uiWidget,
+then appA should directly declare uiWidget in moduleDeps or compileModuleDeps.
 ```
 
-It should not rely on `domain` only because another dependency happens to bring
-it in transitively.
+It should not rely on `uiWidget` only because `appB-admin` happens to bring it
+in transitively.
 
 ```text
-app
+appA
  |
  v
-api
+appB-admin
  |
  v
-domain
+uiWidget
 ```
 
-If `app` source code uses `domain.User`, then this is not strict enough:
+If `appA` source code uses `uiWidget.Button`, then this is not strict enough:
 
 ```scala
-object app extends ScalaModule {
-  def moduleDeps = Seq(api)
+object appA extends ScalaModule {
+  def moduleDeps = Seq(appBAdmin)
 }
 ```
 
 The strict version is:
 
 ```scala
-object app extends ScalaModule {
-  def moduleDeps = Seq(api, domain)
+object appA extends ScalaModule {
+  def moduleDeps = Seq(uiWidget)
 }
 ```
 

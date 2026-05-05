@@ -73,6 +73,59 @@ This plugin does not redesign your modules. It is the scale on the sorting
 table: it tells you which boxes were packed but not consumed, and which boxes
 were consumed through someone else's box.
 
+## Prior Art
+
+This project follows the same basic idea as Bazel's
+[Strict Java Deps and `unused_deps`](https://blog.bazel.build/2017/06/28/sjd-unused_deps.html).
+Bazel's Java flow has four useful parts:
+
+```text
+BUILD deps
+  |
+  v
+javac params say which jars are direct deps
+  |
+  v
+compiler records which jars were actually used into .jdeps
+  |
+  v
+unused_deps compares both lists and prints buildozer fixes
+```
+
+The Mill version maps those ideas like this:
+
+| Bazel idea | Mill strict-deps equivalent |
+| --- | --- |
+| `--direct_dependencies` from the Java compile action | `moduleDeps` declared on the Mill module |
+| `.jdeps` proto containing compile-time jar usage | Zinc analysis containing used class relations |
+| strict-deps compiler plugin detects indirect jars during javac | report phase detects used transitive modules from Zinc analysis |
+| `unused_deps` emits Buildozer commands | future fixer can emit suggested `build.mill` edits |
+
+Implementation details worth learning from Bazel:
+
+- Keep the compiler classpath broad enough that diagnosis can run without
+  breaking ordinary symbol resolution first.
+- Record dependency usage as structured data, not console text.
+- Separate detection from editing: first produce facts, then produce safe fix
+  commands.
+- Include enough ownership information to say exactly which dependency to add
+  or remove.
+- Treat generated code, reflection, annotation processors, and runtime-only
+  dependencies as explicit edge cases, not afterthoughts.
+
+Useful source references:
+
+- [`unused_deps.go`](https://github.com/bazelbuild/buildtools/blob/master/unused_deps/unused_deps.go)
+  reads javac params plus `.jdeps`, then prints Buildozer commands.
+- [`deps.proto`](https://github.com/bazelbuild/bazel/blob/master/src/main/protobuf/deps.proto)
+  is the structured dependency usage format behind `.jdeps`.
+- [`JavaCompileActionBuilder`](https://github.com/bazelbuild/bazel/blob/master/src/main/java/com/google/devtools/build/lib/rules/java/JavaCompileActionBuilder.java)
+  passes direct-dependency metadata into JavaBuilder.
+- [`StrictJavaDepsPlugin`](https://github.com/bazelbuild/bazel/blob/master/src/java_tools/buildjar/java/com/google/devtools/build/buildjar/javac/plugins/dependency/StrictJavaDepsPlugin.java)
+  checks whether directly referenced types came from indirect jars.
+- [`DependencyModule`](https://github.com/bazelbuild/bazel/blob/master/src/java_tools/buildjar/java/com/google/devtools/build/buildjar/javac/plugins/dependency/DependencyModule.java)
+  collects dependency facts and writes the `.jdeps` output.
+
 ## Current Scope
 
 Implemented first:
@@ -97,4 +150,3 @@ Planned:
 ./mill strictdeps.test
 ./mill strictdeps.publishLocal
 ```
-

@@ -1,0 +1,59 @@
+//| mill-version: 1.1.6-7-15943a
+
+package build
+
+import mill.*
+import mill.scalalib.*
+import mill.scalalib.publish.*
+
+object Versions {
+  val mill = "1.1.6-7-15943a"
+  val scala = "3.8.3"
+  val zinc = "2.0.0-M16"
+  val utest = "0.9.1"
+  val plugin = "0.1.0"
+}
+
+/**
+ * Mill plugin that adds strict dependency reporting to JVM modules.
+ *
+ * Publish locally with `./mill strictdeps.publishLocal`.
+ */
+object strictdeps extends ScalaModule with PublishModule {
+  def scalaVersion = Versions.scala
+  def artifactName = "mill-strict-deps"
+  def platformSuffix = "_mill1"
+
+  def mvnDeps = Task {
+    Seq(
+      mvn"com.lihaoyi::mill-libs:${Versions.mill}",
+      mvn"org.scala-sbt::zinc:${Versions.zinc}"
+    )
+  }
+
+  override protected def resolvedDepsWarnNonPlatform: T[Boolean] = Task {
+    false
+  }
+
+  object test extends ScalaTests with TestModule.Utest {
+    override def forkArgs = Task {
+      super.forkArgs() ++ Seq(s"-Dmill.strictdeps.test.scalaVersion=${Versions.scala}")
+    }
+
+    def mvnDeps = Seq(
+      mvn"com.lihaoyi::utest:${Versions.utest}",
+      mvn"com.lihaoyi::mill-testkit:${Versions.mill}"
+    )
+  }
+
+  def pomSettings = PomSettings(
+    description = "Mill plugin for strict JVM dependency reports",
+    organization = "io.github.nguyenyou",
+    url = "https://github.com/nguyenyou/mill-strict-deps",
+    licenses = Seq(License.MIT),
+    versionControl = VersionControl.github("nguyenyou", "mill-strict-deps"),
+    developers = Seq(Developer("nguyenyou", "nguyenyou", "https://github.com/nguyenyou"))
+  )
+
+  def publishVersion = Versions.plugin
+}

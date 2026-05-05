@@ -1,0 +1,13 @@
+out/
+.bsp/
+.metals/
+.bloop/
+.vscode/
+.idea/
+.mill/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+.scala-build
+

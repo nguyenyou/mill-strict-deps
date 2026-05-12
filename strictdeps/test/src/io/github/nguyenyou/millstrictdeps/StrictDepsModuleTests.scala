@@ -48,6 +48,15 @@ object StrictDepsFixtureBuild extends TestRootModule {
     override def moduleDeps = Seq(appB)
   }
 
+  object fat extends ScalaModule {
+    def scalaVersion = sharedScalaVersion
+  }
+
+  object reachClient extends ScalaModule with StrictDepsModule {
+    def scalaVersion = sharedScalaVersion
+    override def moduleDeps = Seq(fat)
+  }
+
   lazy val millDiscover = Discover[this.type]
 }
 
@@ -163,6 +172,47 @@ object StrictDepsModuleTests extends TestSuite {
           case Right(_) =>
             throw new Exception("strictDepsCheck unexpectedly passed")
         }
+      }
+    }
+
+    test("reports dependency class and source reachability") {
+      val resourceFolder = os.Path(sys.env("MILL_TEST_RESOURCE_DIR"))
+      UnitTester(StrictDepsFixtureBuild, resourceFolder / "strict-deps-project").scoped { eval =>
+        val jsonResult = eval(StrictDepsFixtureBuild.reachClient.strictDepsJsonReport).fold(
+          failure => throw new Exception(failure.toString),
+          identity
+        )
+        val json = read(os.read(jsonResult.value.path))
+        val reachability = json("reachability")
+        val fatModule = reachability("modules").arr.find { module =>
+          module("moduleName").str == "fat"
+        }.getOrElse(throw new Exception("fat reachability module not found"))
+
+        assert(json("moduleName").str == "reachClient")
+        assert(!json("hasProblems").bool)
+        assert(reachability("providedClassCount").num == 3)
+        assert(reachability("directUsedClassCount").num == 1)
+        assert(reachability("reachableClassCount").num == 2)
+        assert(reachability("unusedClassCount").num == 1)
+        assert(reachability("providedSourceCount").num == 3)
+        assert(reachability("reachableSourceCount").num == 2)
+        assert(reachability("unusedSourceCount").num == 1)
+        assert(fatModule("directUsedClasses").arr.exists(_.str == "com.example.fat.FatEntry"))
+        assert(fatModule("reachableClasses").arr.exists(_.str == "com.example.fat.Needed"))
+        assert(fatModule("unusedClasses").arr.exists(_.str == "com.example.fat.Unused"))
+        assert(fatModule("unusedSources").arr.exists(_.str.endsWith("Unused.scala")))
+        assert(fatModule("reachableClassPercent").num == 66.7)
+        assert(fatModule("reachableSourcePercent").num == 66.7)
+
+        val markdownResult = eval(StrictDepsFixtureBuild.reachClient.strictDepsReport).fold(
+          failure => throw new Exception(failure.toString),
+          identity
+        )
+        val markdown = os.read(markdownResult.value.path)
+
+        assert(markdown.contains("Classpath Reachability"))
+        assert(markdown.contains("com.example.fat.FatEntry"))
+        assert(markdown.contains("Unused.scala"))
       }
     }
   }

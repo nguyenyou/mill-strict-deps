@@ -17,6 +17,7 @@ object StrictDepsMarkdownRenderer {
     builder.append(s"| missing direct module deps | ${report.missingDirectModuleDeps.size} |\n")
     builder.append(s"| used library classpath entries | ${report.usedLibraryClasspathEntries.size} |\n\n")
 
+    renderReachability(builder, report.reachability, maxClassesPerModule)
     renderUsageWeights(builder, report.dependencyUsageWeights, maxClassesPerModule)
     renderUnused(builder, report.unusedDirectModuleDeps)
     renderUsageSection(
@@ -44,6 +45,61 @@ object StrictDepsMarkdownRenderer {
       }
     }
     builder.result()
+  }
+
+  private def renderReachability(
+      builder: StringBuilder,
+      reachability: StrictDepsReachabilityReport,
+      maxItemsPerModule: Int
+  ): Unit = {
+    builder.append("## Classpath Reachability\n\n")
+    builder.append(
+      "This graph starts at dependency classes directly used by this module, then follows Zinc class dependencies through transitive compile module deps.\n\n"
+    )
+
+    builder.append("| metric | classes | sources |\n")
+    builder.append("| --- | ---: | ---: |\n")
+    builder.append(
+      s"| provided by dependency modules | ${reachability.providedClassCount} | ${reachability.providedSourceCount} |\n"
+    )
+    builder.append(
+      s"| directly used roots | ${reachability.directUsedClassCount} | ${reachability.directUsedSourceCount} |\n"
+    )
+    builder.append(
+      s"| reachable needed | ${reachability.reachableClassCount} (${formatPercent(reachability.reachableClassPercent)}) | ${reachability.reachableSourceCount} (${formatPercent(reachability.reachableSourcePercent)}) |\n"
+    )
+    builder.append(
+      s"| not reached | ${reachability.unusedClassCount} | ${reachability.unusedSourceCount} |\n\n"
+    )
+
+    if (reachability.modules.isEmpty) {
+      builder.append("_No dependency module classes recorded by Zinc._\n\n")
+    } else {
+      builder.append(
+        "| module | relationship | reachable classes | reachable sources | not reached sources | sample direct roots | sample not reached sources |\n"
+      )
+      builder.append("| --- | --- | ---: | ---: | ---: | --- | --- |\n")
+      reachability.modules.foreach { module =>
+        val relationship =
+          if (module.declaredDirect) {
+            "direct"
+          } else {
+            "transitive"
+          }
+        val reachableClasses =
+          s"${module.reachableClassCount} / ${module.providedClassCount} (${formatPercent(module.reachableClassPercent)})"
+        val reachableSources =
+          s"${module.reachableSourceCount} / ${module.providedSourceCount} (${formatPercent(module.reachableSourcePercent)})"
+        builder.append(
+          s"| `${escape(module.moduleName)}` | $relationship | $reachableClasses | $reachableSources | ${module.unusedSourceCount} | "
+        )
+        builder.append(sampleValues(module.directUsedClasses, maxItemsPerModule))
+        builder.append(" | ")
+        builder.append(sampleValues(module.unusedSources, maxItemsPerModule))
+        builder.append(" |\n")
+      }
+      builder.append("\n")
+    }
   }
 
   private def renderUnused(builder: StringBuilder, modules: Seq[String]): Unit = {
@@ -84,18 +140,9 @@ object StrictDepsMarkdownRenderer {
           }
         val touched =
           s"${weight.usedClassCount} / ${weight.dependencyClassCount} (${formatPercent(weight.dependencyTouchedPercent)})"
-        val sample = weight.usedClasses
-          .take(maxClassesPerModule)
-          .map(className => s"`$className`")
-          .mkString("<br>")
-        val suffix =
-          if (weight.usedClasses.size > maxClassesPerModule) {
-            s"<br>... ${weight.usedClasses.size - maxClassesPerModule} more"
-          } else {
-            ""
-          }
+        val sample = sampleValues(weight.usedClasses, maxClassesPerModule)
         builder.append(
-          s"| `${escape(weight.moduleName)}` | $relationship | ${weight.usedClassCount} | ${formatPercent(weight.currentModuleUsagePercent)} | $touched | $sample$suffix |\n"
+          s"| `${escape(weight.moduleName)}` | $relationship | ${weight.usedClassCount} | ${formatPercent(weight.currentModuleUsagePercent)} | $touched | $sample |\n"
         )
       }
       builder.append("\n")
@@ -119,21 +166,29 @@ object StrictDepsMarkdownRenderer {
       builder.append("| module | used classes | sample |\n")
       builder.append("| --- | ---: | --- |\n")
       usages.foreach { usage =>
-        val sample = usage.usedClasses
-          .take(maxClassesPerModule)
-          .map(className => s"`$className`")
-          .mkString("<br>")
-        val suffix =
-          if (usage.usedClasses.size > maxClassesPerModule) {
-            s"<br>... ${usage.usedClasses.size - maxClassesPerModule} more"
-          } else {
-            ""
-          }
         builder.append(
-          s"| `${escape(usage.moduleName)}` | ${usage.usedClassCount} | $sample$suffix |\n"
+          s"| `${escape(usage.moduleName)}` | ${usage.usedClassCount} | ${sampleValues(usage.usedClasses, maxClassesPerModule)} |\n"
         )
       }
       builder.append("\n")
+    }
+  }
+
+  private def sampleValues(values: Seq[String], maxValues: Int): String = {
+    if (values.isEmpty) {
+      ""
+    } else {
+      val sample = values
+        .take(maxValues)
+        .map(value => s"`${escape(value)}`")
+        .mkString("<br>")
+      val suffix =
+        if (values.size > maxValues) {
+          s"<br>... ${values.size - maxValues} more"
+        } else {
+          ""
+        }
+      sample + suffix
     }
   }
 

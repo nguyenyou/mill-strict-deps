@@ -1,5 +1,6 @@
 package io.github.nguyenyou.millstrictdeps
 
+import scala.collection.mutable
 import scala.math.round
 
 import sbt.internal.inc.Analysis
@@ -18,9 +19,10 @@ object StrictDepsAnalyzer {
       .map(normalizeUsedClassName)
       .sorted
       .distinct
-    val moduleClasses = transitiveModules.map { module =>
-      module.moduleName -> definedClasses(readAnalysis(module.analysisFile))
-    }.filter { case (_, classes) => classes.nonEmpty }
+    val analyzedModules = transitiveModules.map(analyzeModule)
+    val moduleClasses = analyzedModules
+      .map(module => module.moduleName -> module.definedClasses)
+      .filter { case (_, classes) => classes.nonEmpty }
     val moduleClassesByName = moduleClasses.toMap
 
     val ownersByClass = moduleClasses
@@ -84,13 +86,164 @@ object StrictDepsAnalyzer {
       .distinct
       .sorted
 
+    val reachability = analyzeReachability(
+      usedExternalClasses = usedExternalClasses.toSet,
+      directModuleNames = directModuleNames,
+      analyzedModules = analyzedModules,
+      ignoredModuleNames = ignoredModuleNames
+    )
+
     StrictDepsReport(
       usedDirectModuleDeps = usedDirectModuleDeps,
       unusedDirectModuleDeps = unusedDirectModuleDeps,
       missingDirectModuleDeps = missingDirectModuleDeps,
       usedLibraryClasspathEntries = usedLibraryClasspathEntries,
-      dependencyUsageWeights = dependencyUsageWeights
+      dependencyUsageWeights = dependencyUsageWeights,
+      reachability = reachability
     )
+  }
+
+  private def analyzeModule(module: StrictDepsModuleSnapshot): AnalyzedModule = {
+    val analysis = readAnalysis(module.analysisFile)
+    val rawClasses = definedClasses(analysis)
+    val defined = rawClasses.map(normalizeUsedClassName)
+    val allSources = analysis.relations.allSources.toSeq.map(_.id).distinct.sorted
+    val sourcesByClass = analysis.relations.allSources.toSeq
+      .flatMap { source =>
+        analysis.relations
+          .classNames(source)
+          .map(normalizeUsedClassName)
+          .map(className => className -> source.id)
+      }
+      .groupMap { case (className, _) => className } { case (_, source) => source }
+      .view
+      .mapValues(_.distinct.sorted.toSet)
+      .toMap
+
+    AnalyzedModule(
+      moduleName = module.moduleName,
+      analysis = analysis,
+      rawClasses = rawClasses,
+      definedClasses = defined,
+      sourcesByClass = sourcesByClass,
+      sources = allSources.toSet
+    )
+  }
+
+  private def analyzeReachability(
+      usedExternalClasses: Set[String],
+      directModuleNames: Set[String],
+      analyzedModules: Seq[AnalyzedModule],
+      ignoredModuleNames: Set[String]
+  ): StrictDepsReachabilityReport = {
+    val allProvidedClasses = analyzedModules.flatMap(_.definedClasses).toSet
+    val relevantModules = analyzedModules.filterNot(module => ignoredModuleNames.contains(module.moduleName))
+    val directlyUsedProvidedClasses = usedExternalClasses.intersect(allProvidedClasses)
+    val graph = classDependencyGraph(analyzedModules, allProvidedClasses)
+    val reachableProvidedClasses = reachableClasses(directlyUsedProvidedClasses, graph)
+      .intersect(allProvidedClasses)
+
+    val moduleReachability = relevantModules
+      .map { module =>
+        val providedClasses = module.definedClasses.toSeq.sorted
+        val directUsedClasses = providedClasses.filter(directlyUsedProvidedClasses.contains)
+        val reachableClasses = providedClasses.filter(reachableProvidedClasses.contains)
+        val unusedClasses = providedClasses.filterNot(reachableProvidedClasses.contains)
+        val directUsedSources = sourcesForClasses(module, directUsedClasses.toSet)
+        val reachableSources = sourcesForClasses(module, reachableClasses.toSet)
+        val unusedSources = module.sources.diff(reachableSources.toSet).toSeq.sorted
+
+        StrictDepsModuleReachability(
+          moduleName = module.moduleName,
+          declaredDirect = directModuleNames.contains(module.moduleName),
+          providedClasses = providedClasses,
+          directUsedClasses = directUsedClasses,
+          reachableClasses = reachableClasses,
+          unusedClasses = unusedClasses,
+          providedSources = module.sources.toSeq.sorted,
+          directUsedSources = directUsedSources,
+          reachableSources = reachableSources,
+          unusedSources = unusedSources,
+          reachableClassPercent = percent(reachableClasses.size, providedClasses.size),
+          reachableSourcePercent = percent(reachableSources.size, module.sources.size)
+        )
+      }
+      .sortBy { module =>
+        (-module.unusedSourceCount, -module.unusedClassCount, module.moduleName)
+      }
+
+    val providedClassCount = moduleReachability.map(_.providedClassCount).sum
+    val directUsedClassCount = moduleReachability.map(_.directUsedClassCount).sum
+    val reachableClassCount = moduleReachability.map(_.reachableClassCount).sum
+    val providedSourceCount = moduleReachability.map(_.providedSourceCount).sum
+    val directUsedSourceCount = moduleReachability.map(_.directUsedSourceCount).sum
+    val reachableSourceCount = moduleReachability.map(_.reachableSourceCount).sum
+
+    StrictDepsReachabilityReport(
+      providedClassCount = providedClassCount,
+      directUsedClassCount = directUsedClassCount,
+      reachableClassCount = reachableClassCount,
+      unusedClassCount = providedClassCount - reachableClassCount,
+      reachableClassPercent = percent(reachableClassCount, providedClassCount),
+      providedSourceCount = providedSourceCount,
+      directUsedSourceCount = directUsedSourceCount,
+      reachableSourceCount = reachableSourceCount,
+      unusedSourceCount = providedSourceCount - reachableSourceCount,
+      reachableSourcePercent = percent(reachableSourceCount, providedSourceCount),
+      modules = moduleReachability
+    )
+  }
+
+  private def classDependencyGraph(
+      analyzedModules: Seq[AnalyzedModule],
+      allProvidedClasses: Set[String]
+  ): Map[String, Set[String]] = {
+    analyzedModules
+      .flatMap { module =>
+        module.rawClasses.map { rawClassName =>
+          val sourceClassName = normalizeUsedClassName(rawClassName)
+          val dependencyClasses =
+            module.analysis.relations.internalClassDeps(rawClassName).map(normalizeUsedClassName) ++
+              module.analysis.relations.externalDeps(rawClassName).map(normalizeUsedClassName)
+          sourceClassName -> dependencyClasses.filter(allProvidedClasses.contains)
+        }
+      }
+      .groupMap { case (sourceClassName, _) => sourceClassName } { case (_, dependencyClasses) =>
+        dependencyClasses
+      }
+      .view
+      .mapValues(_.foldLeft(Set.empty[String])(_ ++ _))
+      .toMap
+  }
+
+  private def reachableClasses(
+      rootClasses: Set[String],
+      dependencyGraph: Map[String, Set[String]]
+  ): Set[String] = {
+    val seen = mutable.Set.empty[String]
+    val queue = mutable.Queue.empty[String]
+    rootClasses.toSeq.sorted.foreach(queue.enqueue(_))
+
+    while (queue.nonEmpty) {
+      val className = queue.dequeue()
+      if (!seen.contains(className)) {
+        seen += className
+        dependencyGraph.getOrElse(className, Set.empty).toSeq.sorted.foreach { dependencyClass =>
+          if (!seen.contains(dependencyClass)) {
+            queue.enqueue(dependencyClass)
+          }
+        }
+      }
+    }
+
+    seen.toSet
+  }
+
+  private def sourcesForClasses(module: AnalyzedModule, classNames: Set[String]): Seq[String] = {
+    classNames.toSeq
+      .flatMap(className => module.sourcesByClass.getOrElse(className, Set.empty))
+      .distinct
+      .sorted
   }
 
   private def readAnalysis(analysisFile: os.Path): Analysis = {
@@ -121,4 +274,13 @@ object StrictDepsAnalyzer {
       round(numerator.toDouble * 1000.0 / denominator).toDouble / 10.0
     }
   }
+
+  private final case class AnalyzedModule(
+      moduleName: String,
+      analysis: Analysis,
+      rawClasses: Set[String],
+      definedClasses: Set[String],
+      sourcesByClass: Map[String, Set[String]],
+      sources: Set[String]
+  )
 }

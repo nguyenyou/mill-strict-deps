@@ -128,6 +128,35 @@ used classes from dependency / all classes defined by that dependency
 That helps separate "this module leans heavily on core" from "this module only
 touches one class through a large dependency".
 
+It also reports classpath reachability:
+
+```text
+direct roots       = dependency classes this module directly touched
+reachable needed   = direct roots plus dependency classes reachable from them
+not reached        = dependency module classes/sources outside that graph
+```
+
+Think of it like pouring ink into the graph at the classes the client touched:
+
+```text
+client source
+   |
+   v
+Button ----> Theme ----> Color
+
+given by dependency modules:
+  Button, Theme, Color, AdminPage, BillingFlow
+
+reachable needed:
+  Button, Theme, Color
+
+not reached:
+  AdminPage, BillingFlow
+```
+
+The per-module reachability table helps find fat module edges: dependencies that
+are real, but provide many classes or source files the client never reaches.
+
 ## Install
 
 `build.mill` header:

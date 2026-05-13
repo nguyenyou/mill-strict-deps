@@ -239,31 +239,40 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       )
 
       assert(markdown.contains("metric                  count"))
-      assert(markdown.contains("compile wave 0  1 module"))
-      assert(markdown.contains("compile wave 1  1 module"))
-      assert(markdown.contains("target wave 2"))
-      assert(markdown.contains("own weight  total weight"))
+      assert(!markdown.contains("compile wave 0"))
+      assert(!markdown.contains("target wave 2"))
+      assert(markdown.contains("own weight  absolute weight"))
+      assert(markdown.contains("wave 0"))
+      assert(markdown.contains("1 module"))
+      assert(markdown.contains("wave 1"))
+      assert(markdown.contains("target"))
+      assert(markdown.contains("wave 2"))
       assert(markdown.contains("app"))
 
       val lines = markdown.linesIterator.toSeq
+      val tableHeader = lines.find(line => line.startsWith("wave") && line.contains("module")).getOrElse("")
+      assert(tableHeader.contains("relationship"))
       val continuousSeparators = lines.filter(line => line.nonEmpty && line.forall(_ == '-'))
       assert(continuousSeparators.size == 2)
       assert(continuousSeparators.forall(_.length > 20))
 
-      val compileWaveLines = lines.dropWhile(!_.startsWith("compile wave 0"))
+      val compileWaveLines = lines.dropWhile(!_.startsWith("wave 0"))
       assert(!compileWaveLines.exists(_.contains("--  --")))
 
       val waveHeaders = lines.filter(line => line.contains("module") && line.contains("relationship"))
-      assert(waveHeaders.size == 2)
+      assert(waveHeaders.size == 1)
       assert(waveHeaders.map(_.indexOf("relationship")).distinct.size == 1)
 
-      val domainRow = lines.find(_.startsWith("domain")).getOrElse("")
-      val apiRow = lines.find(_.startsWith("modules.reallyLong.api")).getOrElse("")
+      val domainRow = lines.find(_.contains("domain")).getOrElse("")
+      val apiRow = lines.find(_.contains("modules.reallyLong.api")).getOrElse("")
       assert(domainRow.indexOf("transitive") == apiRow.indexOf("direct"))
 
-      val targetHeaderIndex = lines.indexWhere(_.startsWith("target wave 2"))
-      assert(lines(targetHeaderIndex + 1).contains("own weight"))
-      assert(lines(targetHeaderIndex + 2).startsWith("app"))
+      val targetRow = lines.find(_.startsWith("target")).getOrElse("")
+      val targetWaveRow = lines.find(_.startsWith("wave 2")).getOrElse("")
+      assert(targetRow.contains("app"))
+      assert(targetRow.contains("target"))
+      assert(targetWaveRow.nonEmpty)
+      assert(lines.forall(line => !line.endsWith(" ")))
     }
 
     test("renders fix plan separately from report facts") {

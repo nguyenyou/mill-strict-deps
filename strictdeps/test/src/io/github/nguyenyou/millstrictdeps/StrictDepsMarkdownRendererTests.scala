@@ -289,6 +289,46 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(lines.forall(line => !line.endsWith(" ")))
     }
 
+    test("renders common ancestors") {
+      val markdown = StrictDepsCommonAncestorsRenderer.render(
+        report = StrictDepsCommonAncestorReport(
+          rootModuleCount = 2,
+          moduleCount = 3,
+          commonAncestorCount = 1,
+          ancestors = Seq(
+            StrictDepsCommonAncestor(
+              moduleName = "commonCore",
+              neededByModuleCount = 2,
+              comparableModuleCount = 2,
+              coveragePercent = 100.0,
+              compileDepth = 0,
+              ownSourceCount = 1,
+              directDependencyModuleCount = 0
+            ),
+            StrictDepsCommonAncestor(
+              moduleName = "featureA",
+              neededByModuleCount = 0,
+              comparableModuleCount = 2,
+              coveragePercent = 0.0,
+              compileDepth = 1,
+              ownSourceCount = 1,
+              directDependencyModuleCount = 1
+            )
+          )
+        ),
+        limit = 10
+      )
+
+      assert(markdown.contains("root modules          2"))
+      assert(markdown.contains("modules analyzed      3"))
+      assert(markdown.contains("common ancestors      1"))
+      assert(markdown.contains("module      needed by  comparable  coverage  depth  own weight  direct deps"))
+      val commonCoreRow = markdown.linesIterator.find(_.startsWith("commonCore")).getOrElse("")
+      assert(commonCoreRow.contains("100.0%"))
+      assert(commonCoreRow.endsWith("0"))
+      assert(markdown.linesIterator.forall(line => !line.endsWith(" ")))
+    }
+
     test("renders fix plan separately from report facts") {
       val fixPlan = StrictDepsFixPlanRenderer.render(
         moduleName = "app",

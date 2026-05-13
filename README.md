@@ -180,6 +180,24 @@ delta weight    = source files first introduced by that row in top-down order
 This view does not draw edges. It uses the direct module-dependency graph to
 place nodes by compile depth, so the terminal output reads top down as compile order.
 
+For a whole-build view, `strictDepsCommonAncestors` prints which modules are
+upstream of the most other modules:
+
+```text
+featureA -+
+featureB -+--> commonCore
+featureC -+
+
+needed by  = how many other modules eventually depend on this module
+comparable = all analyzed modules except this candidate module
+coverage   = needed by / comparable
+```
+
+When `needed by == comparable`, that row is a common ancestor: every other
+analyzed module eventually needs it. The command gathers
+`__.strictDepsGraphSnapshot`, so the analyzed universe is the modules that mix in
+`StrictDepsModule` plus the transitive module deps visible from their snapshots.
+
 It also reports classpath reachability:
 
 ```text
@@ -215,7 +233,7 @@ are real, but provide many classes or source files the client never reaches.
 
 ```scala
 //| mvnDeps:
-//| - io.github.nguyenyou::mill-strict-deps::1.3.1
+//| - io.github.nguyenyou::mill-strict-deps::1.4.0
 ```
 
 The `::version` shorthand appends `_mill$MILL_BIN_PLATFORM`, so on Mill 1.x it
@@ -241,6 +259,9 @@ object appA extends ScalaModule with StrictDepsModule {
 ./mill appA.strictDepsWeight
 ./mill appA.strictDepsCompileDepth
 ./mill appA.strictDepsCheck
+
+# Global graph command. Collects every __.strictDepsGraphSnapshot.
+./mill io.github.nguyenyou.millstrictdeps.strictDepsCommonAncestors/
 ```
 
 Outputs:

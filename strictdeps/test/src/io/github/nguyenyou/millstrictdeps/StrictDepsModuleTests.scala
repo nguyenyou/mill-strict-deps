@@ -7,6 +7,7 @@ import mill.api.daemon.ExecResult
 import mill.scalalib.ScalaModule
 import mill.testkit.TestRootModule
 import mill.testkit.UnitTester
+import mill.util.Tasks
 import ujson.read
 import utest.*
 
@@ -56,6 +57,20 @@ object StrictDepsFixtureBuild extends TestRootModule {
   object reachClient extends ScalaModule with StrictDepsModule {
     def scalaVersion = sharedScalaVersion
     override def moduleDeps = Seq(fat)
+  }
+
+  object commonCore extends ScalaModule {
+    def scalaVersion = sharedScalaVersion
+  }
+
+  object commonA extends ScalaModule with StrictDepsModule {
+    def scalaVersion = sharedScalaVersion
+    override def moduleDeps = Seq(commonCore)
+  }
+
+  object commonB extends ScalaModule with StrictDepsModule {
+    def scalaVersion = sharedScalaVersion
+    override def moduleDeps = Seq(commonCore)
   }
 
   lazy val millDiscover = Discover[this.type]
@@ -329,6 +344,50 @@ object StrictDepsModuleTests extends TestSuite {
         eval(StrictDepsFixtureBuild.app.strictDepsCompileDepth()) match {
           case Left(failure) =>
             throw new Exception(s"Unexpected strictDepsCompileDepth failure: $failure")
+          case Right(_) =>
+            ()
+        }
+      }
+    }
+
+    test("runs strictDepsCommonAncestors global command") {
+      val resourceFolder = os.Path(sys.env("MILL_TEST_RESOURCE_DIR"))
+      UnitTester(StrictDepsFixtureBuild, resourceFolder / "strict-deps-project").scoped { eval =>
+        def force[T](result: Either[?, UnitTester.Result[T]]): T = {
+          result.fold(
+            failure => throw new Exception(failure.toString),
+            success => success.value
+          )
+        }
+
+        val commonASnapshot = force(eval(StrictDepsFixtureBuild.commonA.strictDepsGraphSnapshot))
+        val commonBSnapshot = force(eval(StrictDepsFixtureBuild.commonB.strictDepsGraphSnapshot))
+        val report = StrictDepsAnalyzer.commonAncestorReport(
+          snapshots = Seq(commonASnapshot, commonBSnapshot)
+        )
+        val commonCore = report.ancestors.find(_.moduleName == "commonCore").getOrElse {
+          throw new Exception("commonCore common ancestor not found")
+        }
+
+        assert(report.rootModuleCount == 2)
+        assert(report.moduleCount == 3)
+        assert(report.commonAncestorCount == 1)
+        assert(commonCore.isCommonAncestor)
+        assert(commonCore.neededByModuleCount == 2)
+        assert(commonCore.comparableModuleCount == 2)
+        assert(commonCore.coveragePercent == 100.0)
+
+        eval(
+          strictDepsCommonAncestors.commonAncestors(
+            Tasks(Seq(
+              StrictDepsFixtureBuild.commonA.strictDepsGraphSnapshot,
+              StrictDepsFixtureBuild.commonB.strictDepsGraphSnapshot
+            )),
+            limit = 10
+          )
+        ) match {
+          case Left(failure) =>
+            throw new Exception(s"Unexpected strictDepsCommonAncestors failure: $failure")
           case Right(_) =>
             ()
         }

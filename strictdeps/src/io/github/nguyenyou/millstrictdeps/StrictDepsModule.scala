@@ -93,6 +93,20 @@ trait StrictDepsModule extends ScalaModule { outer =>
     Result.Success(())
   }
 
+  def strictDepsGraphSnapshot: T[StrictDepsGraphSnapshot] = Task {
+    val currentNode = strictDepsGraphNode(
+      moduleName = moduleSegments.render,
+      module = outer,
+      sourceFiles = allSourceFiles()
+    )
+    val dependencyNodes = strictDepsDependencyGraphNodes()()
+
+    StrictDepsGraphSnapshot(
+      moduleName = currentNode.moduleName,
+      modules = mergeGraphNodes(currentNode +: dependencyNodes)
+    )
+  }
+
   def strictDepsCheck(): Command[Unit] = Task.Command {
     val report = analyzeStrictDeps()()
     val failures = Seq(
@@ -171,6 +185,18 @@ trait StrictDepsModule extends ScalaModule { outer =>
     }()
   }
 
+  private def strictDepsDependencyGraphNodes(): Task[Seq[StrictDepsGraphModule]] = Task.Anon {
+    Task.traverse(outer.transitiveModuleCompileModuleDeps.distinct) { module =>
+      Task.Anon {
+        strictDepsGraphNode(
+          moduleName = module.toString,
+          module = module,
+          sourceFiles = module.allSourceFiles()
+        )
+      }
+    }()
+  }
+
   private def directCompileModules: Seq[JavaModule] = {
     directCompileModules(outer)
   }
@@ -181,5 +207,36 @@ trait StrictDepsModule extends ScalaModule { outer =>
 
   private def sourceFileIds(files: Seq[PathRef]): Seq[String] = {
     files.map(_.path.toString).distinct.sorted
+  }
+
+  private def strictDepsGraphNode(
+      moduleName: String,
+      module: JavaModule,
+      sourceFiles: Seq[PathRef]
+  ): StrictDepsGraphModule = {
+    StrictDepsGraphModule(
+      moduleName = moduleName,
+      directDependencyModuleNames = directCompileModules(module)
+        .map(_.toString)
+        .distinct
+        .sorted,
+      ownSourceCount = sourceFileIds(sourceFiles).size
+    )
+  }
+
+  private def mergeGraphNodes(nodes: Seq[StrictDepsGraphModule]): Seq[StrictDepsGraphModule] = {
+    nodes
+      .groupMapReduce(_.moduleName)(identity) { (left, right) =>
+        StrictDepsGraphModule(
+          moduleName = left.moduleName,
+          directDependencyModuleNames = (left.directDependencyModuleNames ++ right.directDependencyModuleNames)
+            .distinct
+            .sorted,
+          ownSourceCount = left.ownSourceCount.max(right.ownSourceCount)
+        )
+      }
+      .values
+      .toSeq
+      .sortBy(_.moduleName)
   }
 }

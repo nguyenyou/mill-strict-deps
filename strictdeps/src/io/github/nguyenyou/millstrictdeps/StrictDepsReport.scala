@@ -1,5 +1,8 @@
 package io.github.nguyenyou.millstrictdeps
 
+import upickle.default.ReadWriter
+import upickle.default.macroRW
+
 final case class StrictDepsReport(
     usedDirectModuleDeps: Seq[StrictDepsModuleUsage],
     unusedDirectModuleDeps: Seq[String],
@@ -78,6 +81,55 @@ final case class StrictDepsCompileDepth(
     index: Int,
     modules: Seq[StrictDepsModuleWeightComparison]
 )
+
+final case class StrictDepsGraphSnapshot(
+    moduleName: String,
+    modules: Seq[StrictDepsGraphModule]
+)
+
+object StrictDepsGraphSnapshot {
+  given ReadWriter[StrictDepsGraphSnapshot] = macroRW
+}
+
+final case class StrictDepsGraphModule(
+    moduleName: String,
+    directDependencyModuleNames: Seq[String],
+    ownSourceCount: Int
+)
+
+object StrictDepsGraphModule {
+  given ReadWriter[StrictDepsGraphModule] = macroRW
+}
+
+final case class StrictDepsCommonAncestorReport(
+    rootModuleCount: Int,
+    moduleCount: Int,
+    commonAncestorCount: Int,
+    ancestors: Seq[StrictDepsCommonAncestor]
+)
+
+object StrictDepsCommonAncestorReport {
+  val empty: StrictDepsCommonAncestorReport = StrictDepsCommonAncestorReport(
+    rootModuleCount = 0,
+    moduleCount = 0,
+    commonAncestorCount = 0,
+    ancestors = Seq.empty
+  )
+}
+
+final case class StrictDepsCommonAncestor(
+    moduleName: String,
+    neededByModuleCount: Int,
+    comparableModuleCount: Int,
+    coveragePercent: Double,
+    compileDepth: Int,
+    ownSourceCount: Int,
+    directDependencyModuleCount: Int
+) {
+  def isCommonAncestor: Boolean = {
+    comparableModuleCount > 0 && neededByModuleCount == comparableModuleCount
+  }
+}
 
 final case class StrictDepsModuleUsageWeight(
     moduleName: String,

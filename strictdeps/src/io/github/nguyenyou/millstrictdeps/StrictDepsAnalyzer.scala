@@ -133,6 +133,65 @@ object StrictDepsAnalyzer {
     )
   }
 
+  def commonAncestorReport(
+      snapshots: Seq[StrictDepsGraphSnapshot]
+  ): StrictDepsCommonAncestorReport = {
+    val rootModuleNames = snapshots.map(_.moduleName).distinct.sorted
+    val graphModules = snapshots.flatMap(_.modules)
+    val dependencyGraph = graphModules
+      .groupMapReduce(_.moduleName)(_.directDependencyModuleNames.toSet)(_ ++ _)
+    val moduleNames = (rootModuleNames ++ dependencyGraph.keys ++ dependencyGraph.values.flatten).toSet
+    val normalizedDependencyGraph = moduleNames.toSeq.sorted.map { moduleName =>
+      moduleName -> dependencyGraph.getOrElse(moduleName, Set.empty).intersect(moduleNames)
+    }.toMap
+    val ownSourceCounts = graphModules
+      .groupMapReduce(_.moduleName)(_.ownSourceCount)(_ max _)
+    val compileDepths = compileDepthLevels(
+      moduleNames = moduleNames,
+      dependencyGraph = normalizedDependencyGraph
+    )
+    val reachableAncestorsByModule = moduleNames.toSeq.sorted.map { moduleName =>
+      moduleName -> dependencyModuleClosure(moduleName, normalizedDependencyGraph)
+        .filterNot(_ == moduleName)
+        .intersect(moduleNames)
+    }.toMap
+
+    val ancestors = moduleNames.toSeq.sorted.map { candidateModuleName =>
+      val comparableModuleNames = moduleNames - candidateModuleName
+      val neededByModuleCount = comparableModuleNames.count { moduleName =>
+        reachableAncestorsByModule.getOrElse(moduleName, Set.empty).contains(candidateModuleName)
+      }
+
+      StrictDepsCommonAncestor(
+        moduleName = candidateModuleName,
+        neededByModuleCount = neededByModuleCount,
+        comparableModuleCount = comparableModuleNames.size,
+        coveragePercent = percent(neededByModuleCount, comparableModuleNames.size),
+        compileDepth = compileDepths.getOrElse(candidateModuleName, 0),
+        ownSourceCount = ownSourceCounts.getOrElse(candidateModuleName, 0),
+        directDependencyModuleCount = normalizedDependencyGraph
+          .getOrElse(candidateModuleName, Set.empty)
+          .size
+      )
+    }.sortBy { ancestor =>
+      (
+        if (ancestor.isCommonAncestor) 0 else 1,
+        -ancestor.coveragePercent,
+        -ancestor.neededByModuleCount,
+        ancestor.compileDepth,
+        -ancestor.ownSourceCount,
+        ancestor.moduleName
+      )
+    }
+
+    StrictDepsCommonAncestorReport(
+      rootModuleCount = rootModuleNames.size,
+      moduleCount = moduleNames.size,
+      commonAncestorCount = ancestors.count(_.isCommonAncestor),
+      ancestors = ancestors
+    )
+  }
+
   def analyze(
       currentAnalysisFile: os.Path,
       directModuleNames: Set[String],

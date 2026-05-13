@@ -14,8 +14,6 @@ object StrictDepsWeightRenderer {
       report: StrictDepsWeightReport
   ): String = {
     val builder = new StringBuilder
-    builder.append(s"Dependency Source Weights: ${display(moduleName)}\n\n")
-    appendMechanism(builder)
     appendSummary(builder, report)
     appendComparisonNote(builder, report)
 
@@ -86,17 +84,6 @@ object StrictDepsWeightRenderer {
     builder.result()
   }
 
-  private def appendMechanism(builder: StringBuilder): Unit = {
-    builder.append("How calculated\n")
-    builder.append("- Mill allSourceFiles gives the source files planned for compiler input.\n")
-    builder.append("- Zinc allSources gives the source files recorded in compile analysis.\n")
-    builder.append("- If Mill and Zinc agree, one number is shown.\n")
-    builder.append("- If they differ, both numbers are shown as Mill / Zinc with a note.\n")
-    builder.append("- total source weight = distinct current module sources plus dependency sources.\n")
-    builder.append("- own source weight = source files from that dependency module only.\n")
-    builder.append("- absolute source weight = that dependency module plus modules reachable from it; rows can overlap.\n\n")
-  }
-
   private def relationship(weight: StrictDepsModuleWeightComparison): String = {
     if (weight.declaredDirect) {
       "direct"
@@ -164,9 +151,7 @@ object StrictDepsWeightRenderer {
       Seq(weight.ownSources, weight.absoluteSources)
     }
 
-    if (comparisons.forall(_.matches)) {
-      builder.append("Mill and Zinc source counts match.\n\n")
-    } else {
+    if (!comparisons.forall(_.matches)) {
       builder.append(
         "Note: Mill is planned compiler input; Zinc is compiled-analysis receipt. " +
           "Differences usually mean generated or wrapped sources, stale analysis, or source filtering.\n\n"

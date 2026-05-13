@@ -360,6 +360,16 @@ object StrictDepsModuleTests extends TestSuite {
         assert(compileDepthDeltaSourceCounts == Map("api" -> 1, "helper" -> 2, "server" -> 1, "domain" -> 1))
         assert(compileDepthDeltaSourceCounts.values.sum == report.dependencySources.millSourceCount)
         assert(weightsByModule("api").compileDepthDeltaSourceLines.millSourceCount == weightsByModule("api").ownSourceLines.millSourceCount)
+        assert(report.reachability.providedClassCount == 5)
+        assert(report.reachability.directUsedClassCount == 4)
+        assert(report.reachability.reachableClassCount == 4)
+        assert(report.reachability.unusedClassCount == 1)
+        assert(report.reachability.reachableClassPercent == 80.0)
+        assert(report.reachability.providedSourceCount == 5)
+        assert(report.reachability.directUsedSourceCount == 4)
+        assert(report.reachability.reachableSourceCount == 4)
+        assert(report.reachability.unusedSourceCount == 1)
+        assert(report.reachability.reachableSourcePercent == 80.0)
       }
     }
 

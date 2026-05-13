@@ -69,7 +69,8 @@ final case class StrictDepsWeightReport(
     totalClassCount: Int = 0,
     dependencyWeights: Seq[StrictDepsModuleWeightComparison],
     compileDepths: Seq[StrictDepsCompileDepth] = Seq.empty,
-    targetDepthIndex: Int = 0
+    targetDepthIndex: Int = 0,
+    reachability: StrictDepsReachabilityReport = StrictDepsReachabilityReport.empty
 )
 
 final case class StrictDepsSourceWeightComparison(

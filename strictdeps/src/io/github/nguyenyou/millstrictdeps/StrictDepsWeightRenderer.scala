@@ -162,7 +162,11 @@ object StrictDepsWeightRenderer {
   }
 
   private def usedClasses(weight: StrictDepsModuleWeightComparison): String = {
-    s"${weight.usedClassCount} / ${weight.usedClassTotalCount} (${formatPercent(weight.usedClassPercent)})"
+    if (weight.usedClassCount == 0) {
+      "zero"
+    } else {
+      s"${weight.usedClassCount} / ${weight.usedClassTotalCount} (${formatPercent(weight.usedClassPercent)})"
+    }
   }
 
   private def appendSummary(
@@ -217,7 +221,46 @@ object StrictDepsWeightRenderer {
       SummaryRow("current module classes", report.currentModuleClassCount.toString, ""),
       SummaryRow("dependency classes", report.dependencyClassCount.toString, ""),
       SummaryRow("total classes", report.totalClassCount.toString, "")
-    )
+    ) ++ reachabilitySummaryRows(report.reachability)
+  }
+
+  private def reachabilitySummaryRows(reachability: StrictDepsReachabilityReport): Seq[SummaryRow] = {
+    if (reachability.providedClassCount == 0 && reachability.providedSourceCount == 0) {
+      Seq.empty
+    } else {
+      Seq(
+        SummaryRow("direct used dependency classes", reachability.directUsedClassCount.toString, ""),
+        SummaryRow(
+          "reachable dependency classes",
+          formatReachability(
+            reached = reachability.reachableClassCount,
+            total = reachability.providedClassCount,
+            percent = reachability.reachableClassPercent
+          ),
+          ""
+        ),
+        SummaryRow("unused dependency classes", reachability.unusedClassCount.toString, ""),
+        SummaryRow("direct used dependency sources", reachability.directUsedSourceCount.toString, ""),
+        SummaryRow(
+          "reachable dependency sources",
+          formatReachability(
+            reached = reachability.reachableSourceCount,
+            total = reachability.providedSourceCount,
+            percent = reachability.reachableSourcePercent
+          ),
+          ""
+        ),
+        SummaryRow("unused dependency sources", reachability.unusedSourceCount.toString, "")
+      )
+    }
+  }
+
+  private def formatReachability(
+      reached: Int,
+      total: Int,
+      percent: Double
+  ): String = {
+    s"$reached / $total (${formatPercent(percent)})"
   }
 
   private def comparisonSummaryRow(

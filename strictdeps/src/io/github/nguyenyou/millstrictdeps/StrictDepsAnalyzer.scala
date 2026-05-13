@@ -24,7 +24,8 @@ object StrictDepsAnalyzer {
     val currentMillSourceLines = sourceLineCounts(currentMillSources)
     val currentZincSourceLines = sourceLineCounts(currentZincSources)
     val millDependencyModules = millTransitiveModules.map(weightModule)
-    val zincDependencyModules = zincTransitiveModules.map(analyzeDependencyModule)
+    val analyzedZincModules = zincTransitiveModules.map(analyzeModule)
+    val zincDependencyModules = analyzedZincModules.map(dependencyModule)
     val millDependencySources = millDependencyModules.flatMap(_.sources).toSet
     val zincDependencySources = zincDependencyModules.flatMap(_.sources).toSet
     val millDependencySourceLines = sourceLineCountsForModules(millDependencyModules)
@@ -33,6 +34,12 @@ object StrictDepsAnalyzer {
     val usedExternalClasses = currentAnalysis.relations.allExternalDeps.toSeq
       .map(normalizeUsedClassName)
       .toSet
+    val reachability = analyzeReachability(
+      usedExternalClasses = usedExternalClasses,
+      directModuleNames = directModuleNames,
+      analyzedModules = analyzedZincModules,
+      ignoredModuleNames = ignoredModuleNames
+    )
     val usedClassesByModule = usedDependencyClassesByModule(
       usedExternalClasses = usedExternalClasses,
       dependencyModules = zincDependencyModules
@@ -180,7 +187,8 @@ object StrictDepsAnalyzer {
       totalClassCount = currentZincClasses.union(zincDependencyClasses).size,
       dependencyWeights = dependencyWeights,
       compileDepths = compileDepthData.depths,
-      targetDepthIndex = compileDepthData.targetDepthIndex
+      targetDepthIndex = compileDepthData.targetDepthIndex,
+      reachability = reachability
     )
   }
 

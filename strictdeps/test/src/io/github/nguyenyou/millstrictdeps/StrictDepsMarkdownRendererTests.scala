@@ -176,7 +176,8 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
               usedClassTotalCount = weight.ownSourceCount,
               usedClassPercent = if (weight.moduleName == "api") 50.0 else 0.0
             )
-          }
+          },
+          reachability = report.reachability
         )
       )
 
@@ -187,6 +188,16 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(markdown.linesIterator.exists(line => line.startsWith("current module sources") && line.trim.endsWith("3")))
       assert(markdown.linesIterator.exists(line => line.startsWith("dependency sources") && line.trim.endsWith("4")))
       assert(markdown.contains("total source weight"))
+      assert(
+        markdown.linesIterator.exists(line =>
+          line.startsWith("reachable dependency classes") && line.trim.endsWith("3 / 5 (60.0%)")
+        )
+      )
+      assert(
+        markdown.linesIterator.exists(line =>
+          line.startsWith("reachable dependency sources") && line.trim.endsWith("3 / 5 (60.0%)")
+        )
+      )
       assert(markdown.contains("own weight  absolute weight  delta weight"))
       val tableHeader = markdown.linesIterator.find(line => line.startsWith("module") && line.contains("relationship")).getOrElse("")
       assert(tableHeader.contains("own lines"))
@@ -203,6 +214,8 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(apiRow.contains("1 / 2 (50.0%)"))
       assert(domainRow.contains("transitive"))
       assert(domainTokens.take(5) == Seq("domain", "transitive", "2", "2", "0"))
+      assert(domainRow.contains("zero"))
+      assert(!domainRow.contains("0 / 2"))
     }
 
     test("renders Mill and Zinc source weight differences") {
@@ -270,11 +283,17 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
             StrictDepsCompileDepth(0, Seq(domainWeight)),
             StrictDepsCompileDepth(1, Seq(apiWeight))
           ),
-          targetDepthIndex = 2
+          targetDepthIndex = 2,
+          reachability = report.reachability
         )
       )
 
       assert(markdown.linesIterator.exists(line => line.startsWith("metric") && line.contains("count")))
+      assert(
+        markdown.linesIterator.exists(line =>
+          line.startsWith("reachable dependency classes") && line.trim.endsWith("3 / 5 (60.0%)")
+        )
+      )
       assert(markdown.contains("own weight  absolute weight  delta weight"))
       val tableHeader = markdown.linesIterator.find(line => line.startsWith("depth") && line.contains("module")).getOrElse("")
       assert(tableHeader.contains("own lines"))
@@ -310,7 +329,8 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(domainTokens.count(_ == "2") >= 3)
       assert(apiTokens.count(_ == "2") >= 2)
       assert(domainRow.contains("1 / 2 (50.0%)"))
-      assert(apiRow.contains("0 / 2 (0.0%)"))
+      assert(apiRow.contains("zero"))
+      assert(!apiRow.contains("0 / 2"))
 
       val targetRow = lines.find(_.startsWith("target")).getOrElse("")
       val targetDepthRow = lines.find(_.startsWith("depth 2")).getOrElse("")

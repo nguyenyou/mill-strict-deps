@@ -166,8 +166,14 @@ delta lines            = source lines from this row's delta source files
 own classes            = Zinc classes defined by the dependency module itself
 used classes           = classes from that dependency module directly referenced
                          by the current module, shown as used / total (%)
+                         or zero when no class is used
 absolute classes       = Zinc classes defined by the dependency module
                          plus modules reachable from it
+direct used dependency classes   = dependency classes this module directly touched
+reachable dependency classes     = direct used classes plus Zinc class deps
+                                   reachable from them, shown as reached / total (%)
+reachable dependency sources     = source files that define reachable dependency classes,
+                                   shown as reached / total (%)
 ```
 
 The command calculates every count both ways. If Mill and Zinc agree, it prints
@@ -177,7 +183,9 @@ Zinc analysis sources. Class metrics are Zinc-only because Mill's source list
 does not know which classes the compiler produced. Absolute weights can overlap
 because two dependency modules can share the same transitive dependency. Delta
 weights are ranked-row contributions, so their sum is the distinct dependency
-source count instead of double-counting overlap.
+source count instead of double-counting overlap. Reachability rows are also
+Zinc-only: they describe compile-analysis class reachability, not runtime
+main-method reachability from a linker.
 
 For a compile-order view, `strictDepsCompileDepth` prints the same module
 source weights grouped from upstream to downstream:
@@ -248,7 +256,7 @@ are real, but provide many classes or source files the client never reaches.
 
 ```scala
 //| mvnDeps:
-//| - io.github.nguyenyou::mill-strict-deps::1.4.0
+//| - io.github.nguyenyou::mill-strict-deps::1.5.0
 ```
 
 The `::version` shorthand appends `_mill$MILL_BIN_PLATFORM`, so on Mill 1.x it

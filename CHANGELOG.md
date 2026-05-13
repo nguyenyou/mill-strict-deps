@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.5.0 - 2026-05-13
+
+### Added
+
+- Added Zinc classpath reachability summary rows to `strictDepsWeight`.
+- Added Zinc classpath reachability summary rows to `strictDepsCompileDepth`.
+
+### Changed
+
+- `used classes` cells now show `zero` when no dependency classes are directly used.
+
+### Notes
+
+- Reachability starts from dependency classes directly used by the current module, then follows Zinc class dependencies through transitive compile module deps.
+- The reachability summary is compile-analysis reachability, not runtime main-method reachability from a linker.
+
 ## 1.4.2 - 2026-05-13
 
 ### Added

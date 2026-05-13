@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.4.1 - 2026-05-13
+
+### Added
+
+- Added `strictDepsCommonAncestors` for whole-build common-ancestor analysis across collected strict-deps graph snapshots.
+- Added source-line metrics to `strictDepsWeight` and `strictDepsCompileDepth`: `own lines`, `absolute lines`, and `delta lines`.
+- Added Zinc class-count metrics to dependency weight reports: current, dependency, and total classes in the summary, plus `own classes` and `absolute classes` per dependency.
+- Added the new source-line and class-count metrics to Markdown and JSON reports.
+
+### Notes
+
+- Source-file and source-line metrics are calculated from both Mill planned compiler input and Zinc compile analysis, then compared.
+- Class-count metrics are Zinc-only because Mill source discovery does not know which classes the compiler produced.
+- Dependency snapshots now carry source file inputs so line counting stays visible to Mill task input tracking.
+
 ## 1.4.0 - 2026-05-13
 
 ### Added

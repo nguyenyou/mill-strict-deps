@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.4.2 - 2026-05-13
+
+### Added
+
+- Added `own lines` and `own classes` columns to `strictDepsCommonAncestors`.
+- Added a `used classes` column to `strictDepsWeight`.
+- Added a `used classes` column to `strictDepsCompileDepth`.
+
+### Notes
+
+- `used classes` is shown as `used / total (percent)`.
+- Used class counts are based on classes from a dependency module directly referenced by the current module according to Zinc analysis.
+- `strictDepsCommonAncestors` now reads compile analysis for graph snapshot nodes so class counts are available in whole-build ancestry output.
+
 ## 1.4.1 - 2026-05-13
 
 ### Added

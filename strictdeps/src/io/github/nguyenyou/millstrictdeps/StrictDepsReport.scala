@@ -92,7 +92,10 @@ final case class StrictDepsModuleWeightComparison(
     deltaSourceLines: StrictDepsSourceWeightComparison = StrictDepsSourceWeightComparison(0, 0),
     compileDepthDeltaSourceLines: StrictDepsSourceWeightComparison = StrictDepsSourceWeightComparison(0, 0),
     ownClassCount: Int = 0,
-    absoluteClassCount: Int = 0
+    absoluteClassCount: Int = 0,
+    usedClassCount: Int = 0,
+    usedClassTotalCount: Int = 0,
+    usedClassPercent: Double = 0.0
 )
 
 final case class StrictDepsCompileDepth(
@@ -112,7 +115,9 @@ object StrictDepsGraphSnapshot {
 final case class StrictDepsGraphModule(
     moduleName: String,
     directDependencyModuleNames: Seq[String],
-    ownSourceCount: Int
+    ownSourceCount: Int,
+    ownSourceLineCount: Int = 0,
+    ownClassCount: Int = 0
 )
 
 object StrictDepsGraphModule {
@@ -142,7 +147,9 @@ final case class StrictDepsCommonAncestor(
     coveragePercent: Double,
     compileDepth: Int,
     ownSourceCount: Int,
-    directDependencyModuleCount: Int
+    directDependencyModuleCount: Int,
+    ownSourceLineCount: Int = 0,
+    ownClassCount: Int = 0
 ) {
   def isCommonAncestor: Boolean = {
     comparableModuleCount > 0 && neededByModuleCount == comparableModuleCount

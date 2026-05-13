@@ -9,6 +9,8 @@ object StrictDepsCommonAncestorsRenderer {
   private val CoverageHeader = "coverage"
   private val DepthHeader = "depth"
   private val OwnWeightHeader = "own weight"
+  private val OwnLinesHeader = "own lines"
+  private val OwnClassesHeader = "own classes"
   private val DirectDepsHeader = "direct deps"
 
   def render(
@@ -71,19 +73,16 @@ object StrictDepsCommonAncestorsRenderer {
       builder: StringBuilder,
       ancestors: Seq[StrictDepsCommonAncestor]
   ): Unit = {
-    val neededByValues = ancestors.map(_.neededByModuleCount.toString)
-    val comparableValues = ancestors.map(_.comparableModuleCount.toString)
-    val coverageValues = ancestors.map(ancestor => formatPercent(ancestor.coveragePercent))
-    val depthValues = ancestors.map(_.compileDepth.toString)
-    val ownWeightValues = ancestors.map(_.ownSourceCount.toString)
-    val directDepsValues = ancestors.map(_.directDependencyModuleCount.toString)
-    val moduleWidth = maxWidth(ModuleHeader +: ancestors.map(ancestor => display(ancestor.moduleName)))
-    val neededByWidth = maxWidth(NeededByHeader +: neededByValues)
-    val comparableWidth = maxWidth(ComparableHeader +: comparableValues)
-    val coverageWidth = maxWidth(CoverageHeader +: coverageValues)
-    val depthWidth = maxWidth(DepthHeader +: depthValues)
-    val ownWeightWidth = maxWidth(OwnWeightHeader +: ownWeightValues)
-    val directDepsWidth = maxWidth(DirectDepsHeader +: directDepsValues)
+    val rows = ancestors.map(renderedRow)
+    val moduleWidth = maxWidth(ModuleHeader +: rows.map(_.module))
+    val neededByWidth = maxWidth(NeededByHeader +: rows.map(_.neededBy))
+    val comparableWidth = maxWidth(ComparableHeader +: rows.map(_.comparable))
+    val coverageWidth = maxWidth(CoverageHeader +: rows.map(_.coverage))
+    val depthWidth = maxWidth(DepthHeader +: rows.map(_.depth))
+    val ownWeightWidth = maxWidth(OwnWeightHeader +: rows.map(_.ownWeight))
+    val ownLinesWidth = maxWidth(OwnLinesHeader +: rows.map(_.ownLines))
+    val ownClassesWidth = maxWidth(OwnClassesHeader +: rows.map(_.ownClasses))
+    val directDepsWidth = maxWidth(DirectDepsHeader +: rows.map(_.directDeps))
 
     appendRow(
       builder = builder,
@@ -93,6 +92,8 @@ object StrictDepsCommonAncestorsRenderer {
       coverageWidth = coverageWidth,
       depthWidth = depthWidth,
       ownWeightWidth = ownWeightWidth,
+      ownLinesWidth = ownLinesWidth,
+      ownClassesWidth = ownClassesWidth,
       directDepsWidth = directDepsWidth,
       moduleValue = ModuleHeader,
       neededByValue = NeededByHeader,
@@ -100,6 +101,8 @@ object StrictDepsCommonAncestorsRenderer {
       coverageValue = CoverageHeader,
       depthValue = DepthHeader,
       ownWeightValue = OwnWeightHeader,
+      ownLinesValue = OwnLinesHeader,
+      ownClassesValue = OwnClassesHeader,
       directDepsValue = DirectDepsHeader
     )
     appendRow(
@@ -110,6 +113,8 @@ object StrictDepsCommonAncestorsRenderer {
       coverageWidth = coverageWidth,
       depthWidth = depthWidth,
       ownWeightWidth = ownWeightWidth,
+      ownLinesWidth = ownLinesWidth,
+      ownClassesWidth = ownClassesWidth,
       directDepsWidth = directDepsWidth,
       moduleValue = "-" * moduleWidth,
       neededByValue = "-" * neededByWidth,
@@ -117,35 +122,48 @@ object StrictDepsCommonAncestorsRenderer {
       coverageValue = "-" * coverageWidth,
       depthValue = "-" * depthWidth,
       ownWeightValue = "-" * ownWeightWidth,
+      ownLinesValue = "-" * ownLinesWidth,
+      ownClassesValue = "-" * ownClassesWidth,
       directDepsValue = "-" * directDepsWidth
     )
 
-    ancestors
-      .zip(neededByValues)
-      .zip(comparableValues)
-      .zip(coverageValues)
-      .zip(depthValues)
-      .zip(ownWeightValues)
-      .zip(directDepsValues)
-      .foreach { case ((((((ancestor, neededBy), comparable), coverage), depth), ownWeight), directDeps) =>
-        appendRow(
-          builder = builder,
-          moduleWidth = moduleWidth,
-          neededByWidth = neededByWidth,
-          comparableWidth = comparableWidth,
-          coverageWidth = coverageWidth,
-          depthWidth = depthWidth,
-          ownWeightWidth = ownWeightWidth,
-          directDepsWidth = directDepsWidth,
-          moduleValue = display(ancestor.moduleName),
-          neededByValue = neededBy,
-          comparableValue = comparable,
-          coverageValue = coverage,
-          depthValue = depth,
-          ownWeightValue = ownWeight,
-          directDepsValue = directDeps
-        )
-      }
+    rows.foreach { row =>
+      appendRow(
+        builder = builder,
+        moduleWidth = moduleWidth,
+        neededByWidth = neededByWidth,
+        comparableWidth = comparableWidth,
+        coverageWidth = coverageWidth,
+        depthWidth = depthWidth,
+        ownWeightWidth = ownWeightWidth,
+        ownLinesWidth = ownLinesWidth,
+        ownClassesWidth = ownClassesWidth,
+        directDepsWidth = directDepsWidth,
+        moduleValue = row.module,
+        neededByValue = row.neededBy,
+        comparableValue = row.comparable,
+        coverageValue = row.coverage,
+        depthValue = row.depth,
+        ownWeightValue = row.ownWeight,
+        ownLinesValue = row.ownLines,
+        ownClassesValue = row.ownClasses,
+        directDepsValue = row.directDeps
+      )
+    }
+  }
+
+  private def renderedRow(ancestor: StrictDepsCommonAncestor): RenderedAncestorRow = {
+    RenderedAncestorRow(
+      module = display(ancestor.moduleName),
+      neededBy = ancestor.neededByModuleCount.toString,
+      comparable = ancestor.comparableModuleCount.toString,
+      coverage = formatPercent(ancestor.coveragePercent),
+      depth = ancestor.compileDepth.toString,
+      ownWeight = ancestor.ownSourceCount.toString,
+      ownLines = ancestor.ownSourceLineCount.toString,
+      ownClasses = ancestor.ownClassCount.toString,
+      directDeps = ancestor.directDependencyModuleCount.toString
+    )
   }
 
   private def appendRow(
@@ -156,6 +174,8 @@ object StrictDepsCommonAncestorsRenderer {
       coverageWidth: Int,
       depthWidth: Int,
       ownWeightWidth: Int,
+      ownLinesWidth: Int,
+      ownClassesWidth: Int,
       directDepsWidth: Int,
       moduleValue: String,
       neededByValue: String,
@@ -163,6 +183,8 @@ object StrictDepsCommonAncestorsRenderer {
       coverageValue: String,
       depthValue: String,
       ownWeightValue: String,
+      ownLinesValue: String,
+      ownClassesValue: String,
       directDepsValue: String
   ): Unit = {
     val row = new StringBuilder
@@ -177,6 +199,10 @@ object StrictDepsCommonAncestorsRenderer {
     row.append(padLeft(depthValue, depthWidth))
     row.append("  ")
     row.append(padLeft(ownWeightValue, ownWeightWidth))
+    row.append("  ")
+    row.append(padLeft(ownLinesValue, ownLinesWidth))
+    row.append("  ")
+    row.append(padLeft(ownClassesValue, ownClassesWidth))
     row.append("  ")
     row.append(padLeft(directDepsValue, directDepsWidth))
     builder.append(trimRight(row.result()))
@@ -208,4 +234,16 @@ object StrictDepsCommonAncestorsRenderer {
       .replace("\r", " ")
       .replace("\n", " ")
   }
+
+  private final case class RenderedAncestorRow(
+      module: String,
+      neededBy: String,
+      comparable: String,
+      coverage: String,
+      depth: String,
+      ownWeight: String,
+      ownLines: String,
+      ownClasses: String,
+      directDeps: String
+  )
 }

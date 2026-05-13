@@ -30,6 +30,13 @@ object StrictDepsAnalyzer {
     val millDependencySourceLines = sourceLineCountsForModules(millDependencyModules)
     val zincDependencySourceLines = sourceLineCountsForModules(zincDependencyModules)
     val zincDependencyClasses = zincDependencyModules.flatMap(_.classes).toSet
+    val usedExternalClasses = currentAnalysis.relations.allExternalDeps.toSeq
+      .map(normalizeUsedClassName)
+      .toSet
+    val usedClassesByModule = usedDependencyClassesByModule(
+      usedExternalClasses = usedExternalClasses,
+      dependencyModules = zincDependencyModules
+    )
     val millDependencyWeightSources = computeDependencyWeightSources(
       dependencyModules = millDependencyModules,
       ignoredModuleNames = ignoredModuleNames
@@ -43,6 +50,8 @@ object StrictDepsAnalyzer {
       .map { moduleName =>
         val millWeight = millDependencyWeightSources.get(moduleName)
         val zincWeight = zincDependencyWeightSources.get(moduleName)
+        val usedClassCount = usedClassesByModule.getOrElse(moduleName, Set.empty).size
+        val usedClassTotalCount = zincWeight.map(_.ownClassCount).getOrElse(0)
         StrictDepsModuleWeightComparison(
           moduleName = moduleName,
           declaredDirect = directModuleNames.contains(moduleName),
@@ -63,7 +72,10 @@ object StrictDepsAnalyzer {
             zincSourceCount = zincWeight.map(_.absoluteSourceLineCount).getOrElse(0)
           ),
           ownClassCount = zincWeight.map(_.ownClassCount).getOrElse(0),
-          absoluteClassCount = zincWeight.map(_.absoluteClassCount).getOrElse(0)
+          absoluteClassCount = zincWeight.map(_.absoluteClassCount).getOrElse(0),
+          usedClassCount = usedClassCount,
+          usedClassTotalCount = usedClassTotalCount,
+          usedClassPercent = percent(usedClassCount, usedClassTotalCount)
         )
       }
     val sortedDependencyWeightModuleNames = dependencyWeightsWithoutDelta
@@ -197,6 +209,10 @@ object StrictDepsAnalyzer {
     }.toMap
     val ownSourceCounts = graphModules
       .groupMapReduce(_.moduleName)(_.ownSourceCount)(_ max _)
+    val ownSourceLineCounts = graphModules
+      .groupMapReduce(_.moduleName)(_.ownSourceLineCount)(_ max _)
+    val ownClassCounts = graphModules
+      .groupMapReduce(_.moduleName)(_.ownClassCount)(_ max _)
     val compileDepths = compileDepthLevels(
       moduleNames = moduleNames,
       dependencyGraph = normalizedDependencyGraph
@@ -222,7 +238,9 @@ object StrictDepsAnalyzer {
         ownSourceCount = ownSourceCounts.getOrElse(candidateModuleName, 0),
         directDependencyModuleCount = normalizedDependencyGraph
           .getOrElse(candidateModuleName, Set.empty)
-          .size
+          .size,
+        ownSourceLineCount = ownSourceLineCounts.getOrElse(candidateModuleName, 0),
+        ownClassCount = ownClassCounts.getOrElse(candidateModuleName, 0)
       )
     }.sortBy { ancestor =>
       (
@@ -231,6 +249,8 @@ object StrictDepsAnalyzer {
         -ancestor.neededByModuleCount,
         ancestor.compileDepth,
         -ancestor.ownSourceCount,
+        -ancestor.ownSourceLineCount,
+        -ancestor.ownClassCount,
         ancestor.moduleName
       )
     }
@@ -240,6 +260,25 @@ object StrictDepsAnalyzer {
       moduleCount = moduleNames.size,
       commonAncestorCount = ancestors.count(_.isCommonAncestor),
       ancestors = ancestors
+    )
+  }
+
+  def graphModule(
+      moduleName: String,
+      directDependencyModuleNames: Seq[String],
+      analysisFile: os.Path,
+      sourceFiles: Seq[String]
+  ): StrictDepsGraphModule = {
+    val ownSources = sourceFiles.toSet
+    val ownSourceLines = sourceLineCounts(ownSources)
+    val analysis = readAnalysis(analysisFile)
+
+    StrictDepsGraphModule(
+      moduleName = moduleName,
+      directDependencyModuleNames = directDependencyModuleNames.distinct.sorted,
+      ownSourceCount = ownSources.size,
+      ownSourceLineCount = sourceLineCount(ownSources, ownSourceLines),
+      ownClassCount = definedClasses(analysis).size
     )
   }
 
@@ -366,6 +405,16 @@ object StrictDepsAnalyzer {
       sourceLinesBySource = sourceLineCounts(sources),
       classes = Set.empty
     )
+  }
+
+  private def usedDependencyClassesByModule(
+      usedExternalClasses: Set[String],
+      dependencyModules: Seq[DependencyModule]
+  ): Map[String, Set[String]] = {
+    dependencyModules.map { module =>
+      val normalizedDependencyClasses = module.classes.map(normalizeUsedClassName)
+      module.moduleName -> usedExternalClasses.intersect(normalizedDependencyClasses)
+    }.toMap
   }
 
   private def analyzeModule(module: StrictDepsModuleSnapshot): AnalyzedModule = {

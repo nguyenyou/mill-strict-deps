@@ -11,6 +11,7 @@ object StrictDepsWeightRenderer {
   private val AbsoluteLinesHeader = "absolute lines"
   private val DeltaLinesHeader = "delta lines"
   private val OwnClassesHeader = "own classes"
+  private val UsedClassesHeader = "used classes"
   private val AbsoluteClassesHeader = "absolute classes"
   private val SourceCountHeader = "count"
   private val NoteHeader = "note"
@@ -44,6 +45,7 @@ object StrictDepsWeightRenderer {
       val absoluteLinesWidth = maxWidth(AbsoluteLinesHeader +: rows.map(_.absoluteLines))
       val deltaLinesWidth = maxWidth(DeltaLinesHeader +: rows.map(_.deltaLines))
       val ownClassesWidth = maxWidth(OwnClassesHeader +: rows.map(_.ownClasses))
+      val usedClassesWidth = maxWidth(UsedClassesHeader +: rows.map(_.usedClasses))
       val absoluteClassesWidth = maxWidth(AbsoluteClassesHeader +: rows.map(_.absoluteClasses))
       val noteWidth = maxWidth(NoteHeader +: rows.map(_.note))
 
@@ -64,6 +66,8 @@ object StrictDepsWeightRenderer {
       builder.append(padLeft(DeltaLinesHeader, deltaLinesWidth))
       builder.append("  ")
       builder.append(padLeft(OwnClassesHeader, ownClassesWidth))
+      builder.append("  ")
+      builder.append(padLeft(UsedClassesHeader, usedClassesWidth))
       builder.append("  ")
       builder.append(padLeft(AbsoluteClassesHeader, absoluteClassesWidth))
       if (showNotes) {
@@ -90,6 +94,8 @@ object StrictDepsWeightRenderer {
       builder.append("  ")
       builder.append("-" * ownClassesWidth)
       builder.append("  ")
+      builder.append("-" * usedClassesWidth)
+      builder.append("  ")
       builder.append("-" * absoluteClassesWidth)
       if (showNotes) {
         builder.append("  ")
@@ -115,6 +121,8 @@ object StrictDepsWeightRenderer {
         builder.append(padLeft(row.deltaLines, deltaLinesWidth))
         builder.append("  ")
         builder.append(padLeft(row.ownClasses, ownClassesWidth))
+        builder.append("  ")
+        builder.append(padLeft(row.usedClasses, usedClassesWidth))
         builder.append("  ")
         builder.append(padLeft(row.absoluteClasses, absoluteClassesWidth))
         if (showNotes) {
@@ -147,9 +155,14 @@ object StrictDepsWeightRenderer {
       absoluteLines = formatComparison(weight.absoluteSourceLines),
       deltaLines = formatComparison(weight.deltaSourceLines),
       ownClasses = weight.ownClassCount.toString,
+      usedClasses = usedClasses(weight),
       absoluteClasses = weight.absoluteClassCount.toString,
       note = rowNote(weight)
     )
+  }
+
+  private def usedClasses(weight: StrictDepsModuleWeightComparison): String = {
+    s"${weight.usedClassCount} / ${weight.usedClassTotalCount} (${formatPercent(weight.usedClassPercent)})"
   }
 
   private def appendSummary(
@@ -287,6 +300,10 @@ object StrictDepsWeightRenderer {
     }
   }
 
+  private def formatPercent(value: Double): String = {
+    f"$value%.1f%%"
+  }
+
   private def maxWidth(values: Seq[String]): Int = {
     values.map(_.length).max
   }
@@ -321,6 +338,7 @@ object StrictDepsWeightRenderer {
       absoluteLines: String,
       deltaLines: String,
       ownClasses: String,
+      usedClasses: String,
       absoluteClasses: String,
       note: String
   )

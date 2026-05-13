@@ -169,7 +169,12 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
               deltaSources = StrictDepsSourceWeightComparison(
                 millSourceCount = weight.deltaSourceCount,
                 zincSourceCount = weight.deltaSourceCount
-              )
+              ),
+              ownClassCount = weight.ownSourceCount,
+              absoluteClassCount = weight.absoluteSourceCount,
+              usedClassCount = if (weight.moduleName == "api") 1 else 0,
+              usedClassTotalCount = weight.ownSourceCount,
+              usedClassPercent = if (weight.moduleName == "api") 50.0 else 0.0
             )
           }
         )
@@ -183,7 +188,10 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(markdown.linesIterator.exists(line => line.startsWith("dependency sources") && line.trim.endsWith("4")))
       assert(markdown.contains("total source weight"))
       assert(markdown.contains("own weight  absolute weight  delta weight"))
-      assert(markdown.contains("own lines  absolute lines  delta lines  own classes  absolute classes"))
+      val tableHeader = markdown.linesIterator.find(line => line.startsWith("module") && line.contains("relationship")).getOrElse("")
+      assert(tableHeader.contains("own lines"))
+      assert(tableHeader.contains("used classes"))
+      assert(tableHeader.contains("absolute classes"))
       assert(markdown.contains("api"))
       assert(markdown.contains("domain"))
       val apiRow = markdown.linesIterator.find(_.startsWith("api")).getOrElse("")
@@ -192,6 +200,7 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       val domainTokens = domainRow.trim.split("\\s+").toSeq
       assert(apiRow.contains("direct"))
       assert(apiTokens.take(5) == Seq("api", "direct", "2", "4", "4"))
+      assert(apiRow.contains("1 / 2 (50.0%)"))
       assert(domainRow.contains("transitive"))
       assert(domainTokens.take(5) == Seq("domain", "transitive", "2", "2", "0"))
     }
@@ -231,14 +240,24 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
         declaredDirect = false,
         ownSources = StrictDepsSourceWeightComparison(2, 2),
         absoluteSources = StrictDepsSourceWeightComparison(2, 2),
-        compileDepthDeltaSources = StrictDepsSourceWeightComparison(2, 2)
+        compileDepthDeltaSources = StrictDepsSourceWeightComparison(2, 2),
+        ownClassCount = 2,
+        absoluteClassCount = 2,
+        usedClassCount = 1,
+        usedClassTotalCount = 2,
+        usedClassPercent = 50.0
       )
       val apiWeight = StrictDepsModuleWeightComparison(
         moduleName = "modules.reallyLong.api",
         declaredDirect = true,
         ownSources = StrictDepsSourceWeightComparison(2, 2),
         absoluteSources = StrictDepsSourceWeightComparison(4, 4),
-        compileDepthDeltaSources = StrictDepsSourceWeightComparison(2, 2)
+        compileDepthDeltaSources = StrictDepsSourceWeightComparison(2, 2),
+        ownClassCount = 2,
+        absoluteClassCount = 4,
+        usedClassCount = 0,
+        usedClassTotalCount = 2,
+        usedClassPercent = 0.0
       )
       val markdown = StrictDepsCompileDepthRenderer.render(
         moduleName = "app",
@@ -257,7 +276,10 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
 
       assert(markdown.linesIterator.exists(line => line.startsWith("metric") && line.contains("count")))
       assert(markdown.contains("own weight  absolute weight  delta weight"))
-      assert(markdown.contains("own lines  absolute lines  delta lines  own classes  absolute classes"))
+      val tableHeader = markdown.linesIterator.find(line => line.startsWith("depth") && line.contains("module")).getOrElse("")
+      assert(tableHeader.contains("own lines"))
+      assert(tableHeader.contains("used classes"))
+      assert(tableHeader.contains("absolute classes"))
       assert(markdown.contains("depth 0"))
       assert(markdown.contains("1 module"))
       assert(markdown.contains("depth 1"))
@@ -266,7 +288,6 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(markdown.contains("app"))
 
       val lines = markdown.linesIterator.toSeq
-      val tableHeader = lines.find(line => line.startsWith("depth") && line.contains("module")).getOrElse("")
       assert(tableHeader.contains("relationship"))
       val continuousSeparators = lines.filter(line => line.nonEmpty && line.forall(_ == '-'))
       assert(continuousSeparators.size == 2)
@@ -288,6 +309,8 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(apiTokens.contains("direct"))
       assert(domainTokens.count(_ == "2") >= 3)
       assert(apiTokens.count(_ == "2") >= 2)
+      assert(domainRow.contains("1 / 2 (50.0%)"))
+      assert(apiRow.contains("0 / 2 (0.0%)"))
 
       val targetRow = lines.find(_.startsWith("target")).getOrElse("")
       val targetDepthRow = lines.find(_.startsWith("depth 2")).getOrElse("")
@@ -313,7 +336,9 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
               coveragePercent = 100.0,
               compileDepth = 0,
               ownSourceCount = 1,
-              directDependencyModuleCount = 0
+              directDependencyModuleCount = 0,
+              ownSourceLineCount = 20,
+              ownClassCount = 2
             ),
             StrictDepsCommonAncestor(
               moduleName = "featureA",
@@ -322,7 +347,9 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
               coveragePercent = 0.0,
               compileDepth = 1,
               ownSourceCount = 1,
-              directDependencyModuleCount = 1
+              directDependencyModuleCount = 1,
+              ownSourceLineCount = 30,
+              ownClassCount = 3
             )
           )
         ),
@@ -332,10 +359,12 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(markdown.contains("root modules          2"))
       assert(markdown.contains("modules analyzed      3"))
       assert(markdown.contains("common ancestors      1"))
-      assert(markdown.contains("module      needed by  comparable  coverage  depth  own weight  direct deps"))
+      assert(markdown.contains("module      needed by  comparable  coverage  depth  own weight  own lines  own classes  direct deps"))
       val commonCoreRow = markdown.linesIterator.find(_.startsWith("commonCore")).getOrElse("")
       assert(commonCoreRow.contains("100.0%"))
       assert(commonCoreRow.endsWith("0"))
+      assert(commonCoreRow.contains("20"))
+      assert(commonCoreRow.contains("2"))
       assert(markdown.linesIterator.forall(line => !line.endsWith(" ")))
     }
 

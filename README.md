@@ -164,6 +164,8 @@ absolute lines         = physical source lines in the dependency module
                          plus modules reachable from it
 delta lines            = source lines from this row's delta source files
 own classes            = Zinc classes defined by the dependency module itself
+used classes           = classes from that dependency module directly referenced
+                         by the current module, shown as used / total (%)
 absolute classes       = Zinc classes defined by the dependency module
                          plus modules reachable from it
 ```
@@ -201,6 +203,9 @@ featureC -+
 needed by  = how many other modules eventually depend on this module
 comparable = all analyzed modules except this candidate module
 coverage   = needed by / comparable
+own weight = source files in this module itself
+own lines  = physical source lines in this module itself
+own classes = Zinc classes defined by this module itself
 ```
 
 When `needed by == comparable`, that row is a common ancestor: every other

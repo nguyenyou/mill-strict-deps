@@ -12,6 +12,7 @@ object StrictDepsCompileDepthRenderer {
   private val AbsoluteLinesHeader = "absolute lines"
   private val DeltaLinesHeader = "delta lines"
   private val OwnClassesHeader = "own classes"
+  private val UsedClassesHeader = "used classes"
   private val AbsoluteClassesHeader = "absolute classes"
   private val SourceCountHeader = "count"
   private val NoteHeader = "note"
@@ -52,6 +53,7 @@ object StrictDepsCompileDepthRenderer {
       absoluteLinesValue = AbsoluteLinesHeader,
       deltaLinesValue = DeltaLinesHeader,
       ownClassesValue = OwnClassesHeader,
+      usedClassesValue = UsedClassesHeader,
       absoluteClassesValue = AbsoluteClassesHeader,
       noteValue = Option.when(layout.showNotes)(NoteHeader).getOrElse("")
     )
@@ -78,6 +80,7 @@ object StrictDepsCompileDepthRenderer {
         absoluteLinesValue = row.absoluteLines,
         deltaLinesValue = row.deltaLines,
         ownClassesValue = row.ownClasses,
+        usedClassesValue = row.usedClasses,
         absoluteClassesValue = row.absoluteClasses,
         noteValue = row.note
       )
@@ -97,6 +100,7 @@ object StrictDepsCompileDepthRenderer {
         absoluteLinesValue = "",
         deltaLinesValue = "",
         ownClassesValue = "",
+        usedClassesValue = "",
         absoluteClassesValue = "",
         noteValue = ""
       )
@@ -129,6 +133,7 @@ object StrictDepsCompileDepthRenderer {
     val targetAbsoluteLinesValue = formatComparison(report.totalSourceLines)
     val targetDeltaLinesValue = formatComparison(report.currentModuleSourceLines)
     val targetOwnClassesValue = report.currentModuleClassCount.toString
+    val targetUsedClassesValue = ""
     val targetAbsoluteClassesValue = report.totalClassCount.toString
     val targetNoteValue = targetNote(report)
     val rows = weights.map(renderedRow)
@@ -154,6 +159,7 @@ object StrictDepsCompileDepthRenderer {
       ),
       deltaLinesWidth = maxWidth(DeltaLinesHeader +: (rows.map(_.deltaLines) :+ targetDeltaLinesValue)),
       ownClassesWidth = maxWidth(OwnClassesHeader +: (rows.map(_.ownClasses) :+ targetOwnClassesValue)),
+      usedClassesWidth = maxWidth(UsedClassesHeader +: (rows.map(_.usedClasses) :+ targetUsedClassesValue)),
       absoluteClassesWidth = maxWidth(
         AbsoluteClassesHeader +: (rows.map(_.absoluteClasses) :+ targetAbsoluteClassesValue)
       ),
@@ -175,6 +181,7 @@ object StrictDepsCompileDepthRenderer {
     val totalLinesValue = formatComparison(report.totalSourceLines)
     val deltaLinesValue = formatComparison(report.currentModuleSourceLines)
     val ownClassesValue = report.currentModuleClassCount.toString
+    val usedClassesValue = ""
     val totalClassesValue = report.totalClassCount.toString
     val note = targetNote(report)
 
@@ -191,6 +198,7 @@ object StrictDepsCompileDepthRenderer {
       absoluteLinesValue = totalLinesValue,
       deltaLinesValue = deltaLinesValue,
       ownClassesValue = ownClassesValue,
+      usedClassesValue = usedClassesValue,
       absoluteClassesValue = totalClassesValue,
       noteValue = note
     )
@@ -207,6 +215,7 @@ object StrictDepsCompileDepthRenderer {
       absoluteLinesValue = "",
       deltaLinesValue = "",
       ownClassesValue = "",
+      usedClassesValue = "",
       absoluteClassesValue = "",
       noteValue = ""
     )
@@ -225,6 +234,7 @@ object StrictDepsCompileDepthRenderer {
       absoluteLinesValue: String,
       deltaLinesValue: String,
       ownClassesValue: String,
+      usedClassesValue: String,
       absoluteClassesValue: String,
       noteValue: String
   ): Unit = {
@@ -248,6 +258,8 @@ object StrictDepsCompileDepthRenderer {
     row.append(padLeft(deltaLinesValue, layout.deltaLinesWidth))
     row.append("  ")
     row.append(padLeft(ownClassesValue, layout.ownClassesWidth))
+    row.append("  ")
+    row.append(padLeft(usedClassesValue, layout.usedClassesWidth))
     row.append("  ")
     row.append(padLeft(absoluteClassesValue, layout.absoluteClassesWidth))
     if (layout.showNotes) {
@@ -340,9 +352,14 @@ object StrictDepsCompileDepthRenderer {
       absoluteLines = formatComparison(weight.absoluteSourceLines),
       deltaLines = formatComparison(weight.compileDepthDeltaSourceLines),
       ownClasses = weight.ownClassCount.toString,
+      usedClasses = usedClasses(weight),
       absoluteClasses = weight.absoluteClassCount.toString,
       note = rowNote(weight)
     )
+  }
+
+  private def usedClasses(weight: StrictDepsModuleWeightComparison): String = {
+    s"${weight.usedClassCount} / ${weight.usedClassTotalCount} (${formatPercent(weight.usedClassPercent)})"
   }
 
   private def appendComparisonNote(
@@ -443,6 +460,10 @@ object StrictDepsCompileDepthRenderer {
     }
   }
 
+  private def formatPercent(value: Double): String = {
+    f"$value%.1f%%"
+  }
+
   private def maxWidth(values: Seq[String]): Int = {
     values.map(_.length).max
   }
@@ -476,6 +497,7 @@ object StrictDepsCompileDepthRenderer {
       absoluteLinesWidth: Int,
       deltaLinesWidth: Int,
       ownClassesWidth: Int,
+      usedClassesWidth: Int,
       absoluteClassesWidth: Int,
       noteWidth: Int,
       showNotes: Boolean
@@ -491,6 +513,7 @@ object StrictDepsCompileDepthRenderer {
         2 + absoluteLinesWidth +
         2 + deltaLinesWidth +
         2 + ownClassesWidth +
+        2 + usedClassesWidth +
         2 + absoluteClassesWidth +
         (if (showNotes) 2 + noteWidth else 0)
     }
@@ -512,6 +535,7 @@ object StrictDepsCompileDepthRenderer {
       absoluteLines: String,
       deltaLines: String,
       ownClasses: String,
+      usedClasses: String,
       absoluteClasses: String,
       note: String
   )

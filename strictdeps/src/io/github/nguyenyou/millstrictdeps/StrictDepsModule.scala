@@ -97,6 +97,7 @@ trait StrictDepsModule extends ScalaModule { outer =>
     val currentNode = strictDepsGraphNode(
       moduleName = moduleSegments.render,
       module = outer,
+      analysisFile = compile().analysisFile,
       sourceFiles = allSourceFiles()
     )
     val dependencyNodes = strictDepsDependencyGraphNodes()()
@@ -192,6 +193,7 @@ trait StrictDepsModule extends ScalaModule { outer =>
         strictDepsGraphNode(
           moduleName = module.toString,
           module = module,
+          analysisFile = module.compile().analysisFile,
           sourceFiles = module.allSourceFiles()
         )
       }
@@ -213,15 +215,17 @@ trait StrictDepsModule extends ScalaModule { outer =>
   private def strictDepsGraphNode(
       moduleName: String,
       module: JavaModule,
+      analysisFile: os.Path,
       sourceFiles: Seq[PathRef]
   ): StrictDepsGraphModule = {
-    StrictDepsGraphModule(
+    StrictDepsAnalyzer.graphModule(
       moduleName = moduleName,
       directDependencyModuleNames = directCompileModules(module)
         .map(_.toString)
         .distinct
         .sorted,
-      ownSourceCount = sourceFileIds(sourceFiles).size
+      analysisFile = analysisFile,
+      sourceFiles = sourceFileIds(sourceFiles)
     )
   }
 
@@ -233,7 +237,9 @@ trait StrictDepsModule extends ScalaModule { outer =>
           directDependencyModuleNames = (left.directDependencyModuleNames ++ right.directDependencyModuleNames)
             .distinct
             .sorted,
-          ownSourceCount = left.ownSourceCount.max(right.ownSourceCount)
+          ownSourceCount = left.ownSourceCount.max(right.ownSourceCount),
+          ownSourceLineCount = left.ownSourceLineCount.max(right.ownSourceLineCount),
+          ownClassCount = left.ownClassCount.max(right.ownClassCount)
         )
       }
       .values

@@ -352,6 +352,11 @@ object StrictDepsModuleTests extends TestSuite {
         assert(weightsByModule("api").deltaSourceLines.millSourceCount == weightsByModule("api").absoluteSourceLines.millSourceCount)
         assert(weightsByModule("api").ownClassCount == 1)
         assert(weightsByModule("api").absoluteClassCount == 2)
+        assert(weightsByModule("api").usedClassCount == 1)
+        assert(weightsByModule("api").usedClassTotalCount == 1)
+        assert(weightsByModule("api").usedClassPercent == 100.0)
+        assert(weightsByModule("server").usedClassCount == 0)
+        assert(weightsByModule("server").usedClassPercent == 0.0)
         assert(compileDepthDeltaSourceCounts == Map("api" -> 1, "helper" -> 2, "server" -> 1, "domain" -> 1))
         assert(compileDepthDeltaSourceCounts.values.sum == report.dependencySources.millSourceCount)
         assert(weightsByModule("api").compileDepthDeltaSourceLines.millSourceCount == weightsByModule("api").ownSourceLines.millSourceCount)
@@ -396,6 +401,8 @@ object StrictDepsModuleTests extends TestSuite {
         assert(commonCore.neededByModuleCount == 2)
         assert(commonCore.comparableModuleCount == 2)
         assert(commonCore.coveragePercent == 100.0)
+        assert(commonCore.ownSourceLineCount > 0)
+        assert(commonCore.ownClassCount == 1)
 
         eval(
           strictDepsCommonAncestors.commonAncestors(

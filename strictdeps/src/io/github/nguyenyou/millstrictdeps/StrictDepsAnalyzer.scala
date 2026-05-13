@@ -50,6 +50,11 @@ object StrictDepsAnalyzer {
           )
         )
       }
+    val compileWaveData = compileWaveReport(
+      directModuleNames = directModuleNames,
+      dependencyWeights = dependencyWeights,
+      dependencyModules = millDependencyModules ++ zincDependencyModules
+    )
 
     StrictDepsWeightReport(
       currentModuleSources = StrictDepsSourceWeightComparison(
@@ -64,7 +69,9 @@ object StrictDepsAnalyzer {
         millSourceCount = currentMillSources.union(millDependencySources).size,
         zincSourceCount = currentZincSources.union(zincDependencySources).size
       ),
-      dependencyWeights = dependencyWeights
+      dependencyWeights = dependencyWeights,
+      compileWaves = compileWaveData.waves,
+      targetWaveIndex = compileWaveData.targetWaveIndex
     )
   }
 
@@ -293,6 +300,86 @@ object StrictDepsAnalyzer {
       }
   }
 
+  private def compileWaveReport(
+      directModuleNames: Set[String],
+      dependencyWeights: Seq[StrictDepsModuleWeightComparison],
+      dependencyModules: Seq[DependencyModule]
+  ): CompileWaveData = {
+    val visibleModuleNames = dependencyWeights.map(_.moduleName).toSet
+    val dependencyGraph = dependencyModules
+      .groupMapReduce(_.moduleName)(_.directDependencyModuleNames.toSet)(_ ++ _)
+      .view
+      .mapValues(_.intersect(visibleModuleNames))
+      .toMap
+    val weightsByModule = dependencyWeights.map(weight => weight.moduleName -> weight).toMap
+    val waveLevels = compileWaveLevels(
+      moduleNames = visibleModuleNames,
+      dependencyGraph = dependencyGraph
+    )
+    val waves = waveLevels.toSeq
+      .groupMap { case (_, waveIndex) => waveIndex } { case (moduleName, _) =>
+        weightsByModule(moduleName)
+      }
+      .toSeq
+      .sortBy { case (waveIndex, _) => waveIndex }
+      .map { case (waveIndex, modules) =>
+        StrictDepsCompileWave(
+          index = waveIndex,
+          modules = modules.sortBy { weight =>
+            (
+              -weight.absoluteSources.maxSourceCount,
+              if (weight.declaredDirect) 0 else 1,
+              weight.moduleName
+            )
+          }
+        )
+      }
+    val targetWaveIndex = directModuleNames
+      .flatMap(waveLevels.get)
+      .maxOption
+      .map(_ + 1)
+      .getOrElse(0)
+
+    CompileWaveData(
+      waves = waves,
+      targetWaveIndex = targetWaveIndex
+    )
+  }
+
+  private def compileWaveLevels(
+      moduleNames: Set[String],
+      dependencyGraph: Map[String, Set[String]]
+  ): Map[String, Int] = {
+    val memo = mutable.Map.empty[String, Int]
+    val visiting = mutable.Set.empty[String]
+
+    def waveLevel(moduleName: String): Int = {
+      memo.getOrElseUpdate(
+        moduleName, {
+          if (visiting.contains(moduleName)) {
+            0
+          } else {
+            visiting += moduleName
+            val dependencyLevels = dependencyGraph
+              .getOrElse(moduleName, Set.empty)
+              .filter(moduleNames.contains)
+              .map(waveLevel)
+            visiting -= moduleName
+
+            if (dependencyLevels.isEmpty) {
+              0
+            } else {
+              dependencyLevels.max + 1
+            }
+          }
+        }
+      )
+    }
+
+    moduleNames.toSeq.sorted.foreach(waveLevel)
+    memo.toMap
+  }
+
   private def analyzeReachability(
       usedExternalClasses: Set[String],
       directModuleNames: Set[String],
@@ -503,6 +590,11 @@ object StrictDepsAnalyzer {
       moduleName: String,
       directDependencyModuleNames: Seq[String],
       sources: Set[String]
+  )
+
+  private final case class CompileWaveData(
+      waves: Seq[StrictDepsCompileWave],
+      targetWaveIndex: Int
   )
 
   private def dependencyModule(module: AnalyzedModule): DependencyModule = {

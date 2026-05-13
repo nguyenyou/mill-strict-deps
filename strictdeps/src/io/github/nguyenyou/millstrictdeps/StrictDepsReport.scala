@@ -52,7 +52,9 @@ final case class StrictDepsWeightReport(
     currentModuleSources: StrictDepsSourceWeightComparison,
     dependencySources: StrictDepsSourceWeightComparison,
     totalSources: StrictDepsSourceWeightComparison,
-    dependencyWeights: Seq[StrictDepsModuleWeightComparison]
+    dependencyWeights: Seq[StrictDepsModuleWeightComparison],
+    compileWaves: Seq[StrictDepsCompileWave] = Seq.empty,
+    targetWaveIndex: Int = 0
 )
 
 final case class StrictDepsSourceWeightComparison(
@@ -68,6 +70,11 @@ final case class StrictDepsModuleWeightComparison(
     declaredDirect: Boolean,
     ownSources: StrictDepsSourceWeightComparison,
     absoluteSources: StrictDepsSourceWeightComparison
+)
+
+final case class StrictDepsCompileWave(
+    index: Int,
+    modules: Seq[StrictDepsModuleWeightComparison]
 )
 
 final case class StrictDepsModuleUsageWeight(

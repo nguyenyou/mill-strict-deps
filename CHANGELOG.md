@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.6.0 - 2026-05-13
+
+### Added
+
+- Added `strictDepsCompileWaste` for module-level compile-waste analysis.
+- Added global `strictDepsCompileWaste` aggregation over collected
+  `__.strictDepsCompileWasteSnapshot` tasks.
+- Added compile-waste data to `strictDepsJsonReport`.
+- Added reachable and wasted delta-source metrics to dependency weight data.
+- Added `introducedByModuleNames` so reports can show which direct edge pulled
+  in each dependency row.
+- Added reachable class and reachable source columns to `strictDepsWeight` and
+  `strictDepsCompileDepth`.
+
+### Changed
+
+- Bumped the JSON report schema version to `4`.
+- Expanded `strictDepsJsonReport` with the full weight report and compile-waste
+  snapshot behind the Markdown and command-line views.
+- Documented the compile-waste metrics, module command, global command, and new
+  JSON fields in the README.
+
+### Notes
+
+- Compile waste compares dependency source files made available to a client with
+  the source files reachable from the dependency classes the client actually
+  uses, then ranks high-waste nodes and edges first.
+- The global command is most useful for finding direct module edges that make
+  many clients compile source files they do not reach through Zinc analysis.
+
 ## 1.5.0 - 2026-05-13
 
 ### Added

@@ -44,12 +44,19 @@ trait StrictDepsModule extends ScalaModule { outer =>
 
   def strictDepsJsonReport: T[PathRef] = Task {
     val report = analyzeStrictDeps()()
+    val weightReport = analyzeStrictDepsWeight()()
+    val compileWaste = StrictDepsAnalyzer.compileWasteSnapshot(
+      moduleName = moduleSegments.render,
+      report = weightReport
+    )
     val out = Task.dest / "strict-deps-report.json"
     os.write.over(
       out,
       StrictDepsJsonRenderer.render(
         moduleName = moduleSegments.render,
-        report = report
+        report = report,
+        weightReport = Some(weightReport),
+        compileWaste = Some(compileWaste)
       )
     )
     Task.log.info(s"strictDepsJsonReport -> $out")
@@ -93,6 +100,21 @@ trait StrictDepsModule extends ScalaModule { outer =>
     Result.Success(())
   }
 
+  def strictDepsCompileWaste(limit: Int = 50): Command[Unit] = Task.Command {
+    val report = analyzeStrictDepsWeight()()
+    val snapshot = StrictDepsAnalyzer.compileWasteSnapshot(
+      moduleName = moduleSegments.render,
+      report = report
+    )
+    Task.log.info(
+      "\n" + StrictDepsCompileWasteRenderer.render(
+        snapshot = snapshot,
+        limit = limit
+      )
+    )
+    Result.Success(())
+  }
+
   def strictDepsGraphSnapshot: T[StrictDepsGraphSnapshot] = Task {
     val currentNode = strictDepsGraphNode(
       moduleName = moduleSegments.render,
@@ -105,6 +127,13 @@ trait StrictDepsModule extends ScalaModule { outer =>
     StrictDepsGraphSnapshot(
       moduleName = currentNode.moduleName,
       modules = mergeGraphNodes(currentNode +: dependencyNodes)
+    )
+  }
+
+  def strictDepsCompileWasteSnapshot: T[StrictDepsCompileWasteSnapshot] = Task {
+    StrictDepsAnalyzer.compileWasteSnapshot(
+      moduleName = moduleSegments.render,
+      report = analyzeStrictDepsWeight()()
     )
   }
 

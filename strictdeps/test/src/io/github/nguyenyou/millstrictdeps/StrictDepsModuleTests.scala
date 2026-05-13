@@ -173,6 +173,28 @@ object StrictDepsModuleTests extends TestSuite {
         assert(domainWeight("absoluteClassCount").num == 1)
         assert(domainWeight("deltaKind").str == "add")
 
+        val weightReport = json("weightReport")
+        val compileWaste = json("compileWaste")
+        val serverWaste = compileWaste("dependencies").arr.find { dependency =>
+          dependency("moduleName").str == "server"
+        }.getOrElse(throw new Exception("server compile waste dependency not found"))
+
+        assert(weightReport("dependencySources")("zincSourceCount").num == 5)
+        assert(weightReport("totalSources")("zincSourceCount").num == 7)
+        assert(weightReport("dependencyClassCount").num == 5)
+        assert(weightReport("totalClassCount").num == 7)
+        assert(weightReport("dependencyWeights").arr.exists { weight =>
+          weight("moduleName").str == "api" &&
+          weight("deltaSources")("zincSourceCount").num == 2 &&
+          weight("introducedByModuleNames").arr.exists(_.str == "api")
+        })
+        assert(compileWaste("moduleName").str == "app")
+        assert(compileWaste("deltaSourceCount").num == 5)
+        assert(compileWaste("wastedDeltaSourceCount").num == 1)
+        assert(serverWaste("declaredDirect").bool)
+        assert(serverWaste("relationship").str == "direct")
+        assert(serverWaste("wastedDeltaSourceCount").num == 1)
+
         val fixPlanResult = eval(StrictDepsFixtureBuild.app.strictDepsFixPlan).fold(
           failure => throw new Exception(failure.toString),
           identity
@@ -268,6 +290,14 @@ object StrictDepsModuleTests extends TestSuite {
         assert(json("dependencyWeights")(0)("absoluteSourceCount").num == 3)
         assert(json("dependencyWeights")(0)("deltaSourceCount").num == 3)
         assert(json("dependencyWeights")(0)("deltaKind").str == "remove")
+        assert(json("weightReport")("dependencyWeights")(0)("moduleName").str == "fat")
+        assert(json("weightReport")("dependencyWeights")(0)("deltaSources")("zincSourceCount").num == 3)
+        assert(json("weightReport")("dependencyWeights")(0)("reachableDeltaSourceCount").num == 2)
+        assert(json("weightReport")("dependencyWeights")(0)("wastedDeltaSourceCount").num == 1)
+        assert(json("compileWaste")("dependencies")(0)("moduleName").str == "fat")
+        assert(json("compileWaste")("dependencies")(0)("deltaSourceCount").num == 3)
+        assert(json("compileWaste")("dependencies")(0)("reachableDeltaSourceCount").num == 2)
+        assert(json("compileWaste")("dependencies")(0)("wastedDeltaSourceCount").num == 1)
         assert(fatModule("directUsedClasses").arr.exists(_.str == "com.example.fat.FatEntry"))
         assert(fatModule("reachableClasses").arr.exists(_.str == "com.example.fat.Needed"))
         assert(fatModule("unusedClasses").arr.exists(_.str == "com.example.fat.Unused"))
@@ -355,8 +385,25 @@ object StrictDepsModuleTests extends TestSuite {
         assert(weightsByModule("api").usedClassCount == 1)
         assert(weightsByModule("api").usedClassTotalCount == 1)
         assert(weightsByModule("api").usedClassPercent == 100.0)
+        assert(weightsByModule("api").reachableClassCount == 1)
+        assert(weightsByModule("api").reachableClassTotalCount == 1)
+        assert(weightsByModule("api").reachableClassPercent == 100.0)
+        assert(weightsByModule("api").reachableSourceCount == 1)
+        assert(weightsByModule("api").reachableSourceTotalCount == 1)
+        assert(weightsByModule("api").reachableSourcePercent == 100.0)
+        assert(weightsByModule("api").introducedByModuleNames == Seq("api"))
+        assert(weightsByModule("api").reachableDeltaSourceCount == 2)
+        assert(weightsByModule("api").wastedDeltaSourceCount == 0)
+        assert(weightsByModule("domain").introducedByModuleNames == Seq("api"))
         assert(weightsByModule("server").usedClassCount == 0)
         assert(weightsByModule("server").usedClassPercent == 0.0)
+        assert(weightsByModule("server").reachableClassCount == 0)
+        assert(weightsByModule("server").reachableSourceCount == 0)
+        assert(weightsByModule("server").introducedByModuleNames == Seq("server"))
+        assert(weightsByModule("server").reachableDeltaSourceCount == 0)
+        assert(weightsByModule("server").wastedDeltaSourceCount == 1)
+        assert(weightsByModule("server").wastedOwnSourceCount == 1)
+        assert(weightsByModule("server").wastedClassCount == 1)
         assert(compileDepthDeltaSourceCounts == Map("api" -> 1, "helper" -> 2, "server" -> 1, "domain" -> 1))
         assert(compileDepthDeltaSourceCounts.values.sum == report.dependencySources.millSourceCount)
         assert(weightsByModule("api").compileDepthDeltaSourceLines.millSourceCount == weightsByModule("api").ownSourceLines.millSourceCount)
@@ -379,6 +426,72 @@ object StrictDepsModuleTests extends TestSuite {
         eval(StrictDepsFixtureBuild.app.strictDepsCompileDepth()) match {
           case Left(failure) =>
             throw new Exception(s"Unexpected strictDepsCompileDepth failure: $failure")
+          case Right(_) =>
+            ()
+        }
+      }
+    }
+
+    test("runs strictDepsCompileWaste command and global aggregation") {
+      val resourceFolder = os.Path(sys.env("MILL_TEST_RESOURCE_DIR"))
+      UnitTester(StrictDepsFixtureBuild, resourceFolder / "strict-deps-project").scoped { eval =>
+        def force[T](result: Either[?, UnitTester.Result[T]]): T = {
+          result.fold(
+            failure => throw new Exception(failure.toString),
+            success => success.value
+          )
+        }
+
+        eval(StrictDepsFixtureBuild.reachClient.strictDepsCompileWaste()) match {
+          case Left(failure) =>
+            throw new Exception(s"Unexpected strictDepsCompileWaste failure: $failure")
+          case Right(_) =>
+            ()
+        }
+
+        val appSnapshot = force(eval(StrictDepsFixtureBuild.app.strictDepsCompileWasteSnapshot))
+        val reachSnapshot = force(eval(StrictDepsFixtureBuild.reachClient.strictDepsCompileWasteSnapshot))
+        val server = appSnapshot.dependencies.find(_.moduleName == "server").getOrElse {
+          throw new Exception("server compile waste row not found")
+        }
+        val fat = reachSnapshot.dependencies.find(_.moduleName == "fat").getOrElse {
+          throw new Exception("fat compile waste row not found")
+        }
+
+        assert(appSnapshot.wastedDeltaSourceCount == 1)
+        assert(server.wastedDeltaSourceCount == 1)
+        assert(server.wastedOwnSourceCount == 1)
+        assert(server.introducedByModuleNames == Seq("server"))
+        assert(reachSnapshot.wastedDeltaSourceCount == 1)
+        assert(fat.deltaSourceCount == 3)
+        assert(fat.reachableDeltaSourceCount == 2)
+        assert(fat.wastedDeltaSourceCount == 1)
+
+        val global = StrictDepsAnalyzer.compileWasteGlobalReport(Seq(appSnapshot, reachSnapshot))
+        val fatNode = global.badNodes.find(_.moduleName == "fat").getOrElse {
+          throw new Exception("fat compile waste node not found")
+        }
+        val fatEdge = global.badEdges.find { edge =>
+          edge.moduleName == "reachClient" && edge.dependencyModuleName == "fat"
+        }.getOrElse(throw new Exception("reachClient -> fat compile waste edge not found"))
+
+        assert(global.rootModuleCount == 2)
+        assert(global.totalWastedDeltaSourceCount == 2)
+        assert(fatNode.totalWastedDeltaSourceCount == 1)
+        assert(fatNode.totalDeltaSourceCount == 3)
+        assert(fatEdge.wastedDeltaSourceCount == 1)
+
+        eval(
+          strictDepsCompileWaste.compileWaste(
+            Tasks(Seq(
+              StrictDepsFixtureBuild.app.strictDepsCompileWasteSnapshot,
+              StrictDepsFixtureBuild.reachClient.strictDepsCompileWasteSnapshot
+            )),
+            limit = 10
+          )
+        ) match {
+          case Left(failure) =>
+            throw new Exception(s"Unexpected strictDepsCompileWaste global failure: $failure")
           case Right(_) =>
             ()
         }

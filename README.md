@@ -167,6 +167,10 @@ own classes            = Zinc classes defined by the dependency module itself
 used classes           = classes from that dependency module directly referenced
                          by the current module, shown as used / total (%)
                          or zero when no class is used
+reachable classes      = direct used classes plus Zinc class deps reachable
+                         from them inside that dependency module
+reachable sources      = source files in that dependency module that define
+                         reachable classes
 absolute classes       = Zinc classes defined by the dependency module
                          plus modules reachable from it
 direct used dependency classes   = dependency classes this module directly touched
@@ -250,6 +254,44 @@ not reached:
 The per-module reachability table helps find fat module edges: dependencies that
 are real, but provide many classes or source files the client never reaches.
 
+For a waste-first view, `strictDepsCompileWaste` shows the rows that are most
+likely to be bad graph shape:
+
+```text
+delta sources           = unique dependency source files this row contributes
+reachable delta sources = delta source files Zinc can reach from classes used
+                          by the current client
+wasted delta sources    = delta sources - reachable delta sources
+wasted own sources      = source files in that dependency module not reached
+introduced by           = direct dependency edge that pulled this row in
+```
+
+This is the view to use when the question is "which dependency edge made this
+client compile files it did not really need?"
+
+```text
+client ----> direct dep ----> transitive dep
+   |              |                 |
+   |              +-----------------+
+   |                    given sources
+   |
+   +---- Zinc class graph ----> reachable sources
+
+waste = given sources - reachable sources
+```
+
+The global `strictDepsCompileWaste` command collects
+`__.strictDepsCompileWasteSnapshot` and prints two hotspot tables:
+
+```text
+bad nodes = dependency modules with high repeated wasted delta
+bad edges = client -> dependency rows with high wasted delta
+```
+
+Use `strictDepsCommonAncestors` to find modules that are upstream of almost
+everything. Use `strictDepsCompileWaste` to find which of those common or large
+modules are actually wasting compile input for clients.
+
 ## Install
 
 `build.mill` header:
@@ -281,10 +323,14 @@ object appA extends ScalaModule with StrictDepsModule {
 ./mill appA.strictDepsFixPlan
 ./mill appA.strictDepsWeight
 ./mill appA.strictDepsCompileDepth
+./mill appA.strictDepsCompileWaste
 ./mill appA.strictDepsCheck
 
 # Global graph command. Collects every __.strictDepsGraphSnapshot.
 ./mill io.github.nguyenyou.millstrictdeps.strictDepsCommonAncestors/
+
+# Global waste command. Collects every __.strictDepsCompileWasteSnapshot.
+./mill io.github.nguyenyou.millstrictdeps.strictDepsCompileWaste/
 ```
 
 Outputs:
@@ -294,6 +340,16 @@ out/appA/strictDepsReport.dest/strict-deps-report.md
 out/appA/strictDepsJsonReport.dest/strict-deps-report.json
 out/appA/strictDepsFixPlan.dest/strict-deps-fix-plan.md
 ```
+
+`strictDepsJsonReport` is the comprehensive machine-readable report. It keeps
+the strict-deps facts used by the Markdown report and also includes:
+
+- `reachability`: Zinc class/source reachability by dependency module.
+- `weightReport`: Mill and Zinc source counts, source-line counts, class
+  counts, absolute weight, delta weight, compile-depth delta weight, and per-row
+  usage/reachability percentages.
+- `compileWaste`: the exact per-client data behind `strictDepsCompileWaste`,
+  sorted by wasted delta source count.
 
 `strictDepsCheck` fails when the module has unused direct module deps or missing
 direct module deps, depending on the module settings.

@@ -123,9 +123,88 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
     }
 
     test("renders structured json report") {
-      val json = read(StrictDepsJsonRenderer.render("app", report))
+      val apiWeight = StrictDepsModuleWeightComparison(
+        moduleName = "api",
+        declaredDirect = true,
+        ownSources = StrictDepsSourceWeightComparison(2, 2),
+        absoluteSources = StrictDepsSourceWeightComparison(4, 4),
+        deltaSources = StrictDepsSourceWeightComparison(4, 4),
+        compileDepthDeltaSources = StrictDepsSourceWeightComparison(2, 2),
+        ownSourceLines = StrictDepsSourceWeightComparison(20, 20),
+        absoluteSourceLines = StrictDepsSourceWeightComparison(40, 40),
+        deltaSourceLines = StrictDepsSourceWeightComparison(40, 40),
+        compileDepthDeltaSourceLines = StrictDepsSourceWeightComparison(20, 20),
+        ownClassCount = 3,
+        absoluteClassCount = 5,
+        usedClassCount = 2,
+        usedClassTotalCount = 3,
+        usedClassPercent = 66.7,
+        reachableClassCount = 2,
+        reachableClassTotalCount = 3,
+        reachableClassPercent = 66.7,
+        reachableSourceCount = 2,
+        reachableSourceTotalCount = 3,
+        reachableSourcePercent = 66.7,
+        reachableDeltaSourceCount = 2,
+        wastedDeltaSourceCount = 2,
+        wastedDeltaSourcePercent = 50.0,
+        wastedOwnSourceCount = 1,
+        wastedClassCount = 1,
+        introducedByModuleNames = Seq("api")
+      )
+      val domainWeight = StrictDepsModuleWeightComparison(
+        moduleName = "domain",
+        declaredDirect = false,
+        ownSources = StrictDepsSourceWeightComparison(2, 2),
+        absoluteSources = StrictDepsSourceWeightComparison(2, 2),
+        deltaSources = StrictDepsSourceWeightComparison(0, 0),
+        compileDepthDeltaSources = StrictDepsSourceWeightComparison(2, 2),
+        ownSourceLines = StrictDepsSourceWeightComparison(12, 12),
+        absoluteSourceLines = StrictDepsSourceWeightComparison(12, 12),
+        deltaSourceLines = StrictDepsSourceWeightComparison(0, 0),
+        compileDepthDeltaSourceLines = StrictDepsSourceWeightComparison(12, 12),
+        ownClassCount = 2,
+        absoluteClassCount = 2,
+        usedClassCount = 1,
+        usedClassTotalCount = 2,
+        usedClassPercent = 50.0,
+        reachableClassCount = 1,
+        reachableClassTotalCount = 2,
+        reachableClassPercent = 50.0,
+        reachableSourceCount = 1,
+        reachableSourceTotalCount = 2,
+        reachableSourcePercent = 50.0,
+        introducedByModuleNames = Seq("api")
+      )
+      val weightReport = StrictDepsWeightReport(
+        currentModuleSources = StrictDepsSourceWeightComparison(3, 3),
+        dependencySources = StrictDepsSourceWeightComparison(4, 4),
+        totalSources = StrictDepsSourceWeightComparison(7, 7),
+        currentModuleSourceLines = StrictDepsSourceWeightComparison(30, 30),
+        dependencySourceLines = StrictDepsSourceWeightComparison(52, 52),
+        totalSourceLines = StrictDepsSourceWeightComparison(82, 82),
+        currentModuleClassCount = 2,
+        dependencyClassCount = 5,
+        totalClassCount = 7,
+        dependencyWeights = Seq(apiWeight, domainWeight),
+        compileDepths = Seq(
+          StrictDepsCompileDepth(0, Seq(domainWeight)),
+          StrictDepsCompileDepth(1, Seq(apiWeight))
+        ),
+        targetDepthIndex = 2,
+        reachability = report.reachability
+      )
+      val compileWaste = StrictDepsAnalyzer.compileWasteSnapshot("app", weightReport)
+      val json = read(
+        StrictDepsJsonRenderer.render(
+          moduleName = "app",
+          report = report,
+          weightReport = Some(weightReport),
+          compileWaste = Some(compileWaste)
+        )
+      )
 
-      assert(json("schemaVersion").num == 3)
+      assert(json("schemaVersion").num == 4)
       assert(json("moduleName").str == "app")
       assert(json("hasProblems").bool)
       assert(json("summary")("unusedDirectModuleDeps").num == 1)
@@ -145,6 +224,20 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(json("dependencyWeights")(0)("directDependencyModuleNames")(0).str == "domain")
       assert(json("reachability")("reachableClassPercent").num == 60.0)
       assert(json("reachability")("modules")(0)("unusedSources")(0).str == "/src/UnusedApi.scala")
+      assert(json("weightReport")("currentModuleSources")("millSourceCount").num == 3)
+      assert(json("weightReport")("currentModuleSources")("zincSourceCount").num == 3)
+      assert(json("weightReport")("currentModuleSources")("matches").bool)
+      assert(json("weightReport")("dependencyWeights")(0)("relationship").str == "direct")
+      assert(json("weightReport")("dependencyWeights")(0)("deltaSources")("zincSourceCount").num == 4)
+      assert(json("weightReport")("dependencyWeights")(0)("wastedDeltaSourceCount").num == 2)
+      assert(json("weightReport")("dependencyWeights")(0)("introducedByModuleNames")(0).str == "api")
+      assert(json("weightReport")("compileDepths")(0)("index").num == 0)
+      assert(json("weightReport")("targetDepthIndex").num == 2)
+      assert(json("compileWaste")("moduleName").str == "app")
+      assert(json("compileWaste")("deltaSourceCount").num == 4)
+      assert(json("compileWaste")("wastedDeltaSourceCount").num == 2)
+      assert(json("compileWaste")("dependencies")(0)("moduleName").str == "api")
+      assert(json("compileWaste")("dependencies")(0)("wastedDeltaSourceCount").num == 2)
     }
 
     test("renders absolute dependency source weight list") {
@@ -202,6 +295,8 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       val tableHeader = markdown.linesIterator.find(line => line.startsWith("module") && line.contains("relationship")).getOrElse("")
       assert(tableHeader.contains("own lines"))
       assert(tableHeader.contains("used classes"))
+      assert(tableHeader.contains("reachable classes"))
+      assert(tableHeader.contains("reachable sources"))
       assert(tableHeader.contains("absolute classes"))
       assert(markdown.contains("api"))
       assert(markdown.contains("domain"))
@@ -212,10 +307,12 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(apiRow.contains("direct"))
       assert(apiTokens.take(5) == Seq("api", "direct", "2", "4", "4"))
       assert(apiRow.contains("1 / 2 (50.0%)"))
+      assert(apiRow.contains("2 / 3 (66.7%)"))
       assert(domainRow.contains("transitive"))
       assert(domainTokens.take(5) == Seq("domain", "transitive", "2", "2", "0"))
       assert(domainRow.contains("zero"))
       assert(!domainRow.contains("0 / 2"))
+      assert(domainRow.contains("1 / 2 (50.0%)"))
     }
 
     test("renders Mill and Zinc source weight differences") {
@@ -258,7 +355,13 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
         absoluteClassCount = 2,
         usedClassCount = 1,
         usedClassTotalCount = 2,
-        usedClassPercent = 50.0
+        usedClassPercent = 50.0,
+        reachableClassCount = 1,
+        reachableClassTotalCount = 2,
+        reachableClassPercent = 50.0,
+        reachableSourceCount = 1,
+        reachableSourceTotalCount = 2,
+        reachableSourcePercent = 50.0
       )
       val apiWeight = StrictDepsModuleWeightComparison(
         moduleName = "modules.reallyLong.api",
@@ -270,7 +373,13 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
         absoluteClassCount = 4,
         usedClassCount = 0,
         usedClassTotalCount = 2,
-        usedClassPercent = 0.0
+        usedClassPercent = 0.0,
+        reachableClassCount = 0,
+        reachableClassTotalCount = 2,
+        reachableClassPercent = 0.0,
+        reachableSourceCount = 0,
+        reachableSourceTotalCount = 2,
+        reachableSourcePercent = 0.0
       )
       val markdown = StrictDepsCompileDepthRenderer.render(
         moduleName = "app",
@@ -298,6 +407,8 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       val tableHeader = markdown.linesIterator.find(line => line.startsWith("depth") && line.contains("module")).getOrElse("")
       assert(tableHeader.contains("own lines"))
       assert(tableHeader.contains("used classes"))
+      assert(tableHeader.contains("reachable classes"))
+      assert(tableHeader.contains("reachable sources"))
       assert(tableHeader.contains("absolute classes"))
       assert(markdown.contains("depth 0"))
       assert(markdown.contains("1 module"))
@@ -386,6 +497,66 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(commonCoreRow.contains("20"))
       assert(commonCoreRow.contains("2"))
       assert(markdown.linesIterator.forall(line => !line.endsWith(" ")))
+    }
+
+    test("renders compile waste views") {
+      val snapshot = StrictDepsCompileWasteSnapshot(
+        moduleName = "app",
+        dependencySourceCount = 3,
+        reachableDependencySourceCount = 2,
+        wastedDependencySourceCount = 1,
+        dependencyClassCount = 3,
+        reachableDependencyClassCount = 2,
+        wastedDependencyClassCount = 1,
+        deltaSourceCount = 3,
+        reachableDeltaSourceCount = 2,
+        wastedDeltaSourceCount = 1,
+        dependencies = Seq(
+          StrictDepsCompileWasteDependency(
+            moduleName = "fat",
+            declaredDirect = true,
+            introducedByModuleNames = Seq("fat"),
+            ownSourceCount = 3,
+            reachableSourceCount = 2,
+            wastedOwnSourceCount = 1,
+            reachableSourcePercent = 66.7,
+            deltaSourceCount = 3,
+            reachableDeltaSourceCount = 2,
+            wastedDeltaSourceCount = 1,
+            wastedDeltaSourcePercent = 33.3,
+            ownClassCount = 3,
+            reachableClassCount = 2,
+            wastedClassCount = 1,
+            reachableClassPercent = 66.7
+          )
+        )
+      )
+      val markdown = StrictDepsCompileWasteRenderer.render(snapshot, limit = 10)
+
+      assert(markdown.contains("wasted dependency sources"))
+      assert(
+        markdown.linesIterator.exists(line =>
+          line.startsWith("wasted delta sources") && line.trim.endsWith("1 (33.3%)")
+        )
+      )
+      assert(markdown.contains("module  relationship  introduced by  delta  reachable delta  wasted delta"))
+      val fatRow = markdown.linesIterator.find(_.startsWith("fat")).getOrElse("")
+      assert(fatRow.contains("direct"))
+      assert(fatRow.contains("1 (33.3%)"))
+      assert(markdown.linesIterator.forall(line => !line.endsWith(" ")))
+
+      val global = StrictDepsAnalyzer.compileWasteGlobalReport(Seq(snapshot))
+      val globalMarkdown = StrictDepsCompileWasteRenderer.renderGlobal(global, limit = 10)
+
+      assert(globalMarkdown.contains("root modules"))
+      assert(globalMarkdown.contains("bad nodes"))
+      assert(globalMarkdown.contains("bad edges"))
+      val edgeRow = globalMarkdown.linesIterator.find(line =>
+        line.startsWith("app") && line.contains("fat")
+      ).getOrElse("")
+      assert(edgeRow.contains("direct"))
+      assert(edgeRow.contains("fat"))
+      assert(globalMarkdown.linesIterator.forall(line => !line.endsWith(" ")))
     }
 
     test("renders fix plan separately from report facts") {

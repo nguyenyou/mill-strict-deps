@@ -13,6 +13,8 @@ object StrictDepsCompileDepthRenderer {
   private val DeltaLinesHeader = "delta lines"
   private val OwnClassesHeader = "own classes"
   private val UsedClassesHeader = "used classes"
+  private val ReachableClassesHeader = "reachable classes"
+  private val ReachableSourcesHeader = "reachable sources"
   private val AbsoluteClassesHeader = "absolute classes"
   private val SourceCountHeader = "count"
   private val NoteHeader = "note"
@@ -54,6 +56,8 @@ object StrictDepsCompileDepthRenderer {
       deltaLinesValue = DeltaLinesHeader,
       ownClassesValue = OwnClassesHeader,
       usedClassesValue = UsedClassesHeader,
+      reachableClassesValue = ReachableClassesHeader,
+      reachableSourcesValue = ReachableSourcesHeader,
       absoluteClassesValue = AbsoluteClassesHeader,
       noteValue = Option.when(layout.showNotes)(NoteHeader).getOrElse("")
     )
@@ -81,6 +85,8 @@ object StrictDepsCompileDepthRenderer {
         deltaLinesValue = row.deltaLines,
         ownClassesValue = row.ownClasses,
         usedClassesValue = row.usedClasses,
+        reachableClassesValue = row.reachableClasses,
+        reachableSourcesValue = row.reachableSources,
         absoluteClassesValue = row.absoluteClasses,
         noteValue = row.note
       )
@@ -101,6 +107,8 @@ object StrictDepsCompileDepthRenderer {
         deltaLinesValue = "",
         ownClassesValue = "",
         usedClassesValue = "",
+        reachableClassesValue = "",
+        reachableSourcesValue = "",
         absoluteClassesValue = "",
         noteValue = ""
       )
@@ -134,6 +142,8 @@ object StrictDepsCompileDepthRenderer {
     val targetDeltaLinesValue = formatComparison(report.currentModuleSourceLines)
     val targetOwnClassesValue = report.currentModuleClassCount.toString
     val targetUsedClassesValue = ""
+    val targetReachableClassesValue = ""
+    val targetReachableSourcesValue = ""
     val targetAbsoluteClassesValue = report.totalClassCount.toString
     val targetNoteValue = targetNote(report)
     val rows = weights.map(renderedRow)
@@ -160,6 +170,12 @@ object StrictDepsCompileDepthRenderer {
       deltaLinesWidth = maxWidth(DeltaLinesHeader +: (rows.map(_.deltaLines) :+ targetDeltaLinesValue)),
       ownClassesWidth = maxWidth(OwnClassesHeader +: (rows.map(_.ownClasses) :+ targetOwnClassesValue)),
       usedClassesWidth = maxWidth(UsedClassesHeader +: (rows.map(_.usedClasses) :+ targetUsedClassesValue)),
+      reachableClassesWidth = maxWidth(
+        ReachableClassesHeader +: (rows.map(_.reachableClasses) :+ targetReachableClassesValue)
+      ),
+      reachableSourcesWidth = maxWidth(
+        ReachableSourcesHeader +: (rows.map(_.reachableSources) :+ targetReachableSourcesValue)
+      ),
       absoluteClassesWidth = maxWidth(
         AbsoluteClassesHeader +: (rows.map(_.absoluteClasses) :+ targetAbsoluteClassesValue)
       ),
@@ -182,6 +198,8 @@ object StrictDepsCompileDepthRenderer {
     val deltaLinesValue = formatComparison(report.currentModuleSourceLines)
     val ownClassesValue = report.currentModuleClassCount.toString
     val usedClassesValue = ""
+    val reachableClassesValue = ""
+    val reachableSourcesValue = ""
     val totalClassesValue = report.totalClassCount.toString
     val note = targetNote(report)
 
@@ -199,6 +217,8 @@ object StrictDepsCompileDepthRenderer {
       deltaLinesValue = deltaLinesValue,
       ownClassesValue = ownClassesValue,
       usedClassesValue = usedClassesValue,
+      reachableClassesValue = reachableClassesValue,
+      reachableSourcesValue = reachableSourcesValue,
       absoluteClassesValue = totalClassesValue,
       noteValue = note
     )
@@ -216,6 +236,8 @@ object StrictDepsCompileDepthRenderer {
       deltaLinesValue = "",
       ownClassesValue = "",
       usedClassesValue = "",
+      reachableClassesValue = "",
+      reachableSourcesValue = "",
       absoluteClassesValue = "",
       noteValue = ""
     )
@@ -235,6 +257,8 @@ object StrictDepsCompileDepthRenderer {
       deltaLinesValue: String,
       ownClassesValue: String,
       usedClassesValue: String,
+      reachableClassesValue: String,
+      reachableSourcesValue: String,
       absoluteClassesValue: String,
       noteValue: String
   ): Unit = {
@@ -260,6 +284,10 @@ object StrictDepsCompileDepthRenderer {
     row.append(padLeft(ownClassesValue, layout.ownClassesWidth))
     row.append("  ")
     row.append(padLeft(usedClassesValue, layout.usedClassesWidth))
+    row.append("  ")
+    row.append(padLeft(reachableClassesValue, layout.reachableClassesWidth))
+    row.append("  ")
+    row.append(padLeft(reachableSourcesValue, layout.reachableSourcesWidth))
     row.append("  ")
     row.append(padLeft(absoluteClassesValue, layout.absoluteClassesWidth))
     if (layout.showNotes) {
@@ -392,6 +420,8 @@ object StrictDepsCompileDepthRenderer {
       deltaLines = formatComparison(weight.compileDepthDeltaSourceLines),
       ownClasses = weight.ownClassCount.toString,
       usedClasses = usedClasses(weight),
+      reachableClasses = reachableClasses(weight),
+      reachableSources = reachableSources(weight),
       absoluteClasses = weight.absoluteClassCount.toString,
       note = rowNote(weight)
     )
@@ -402,6 +432,22 @@ object StrictDepsCompileDepthRenderer {
       "zero"
     } else {
       s"${weight.usedClassCount} / ${weight.usedClassTotalCount} (${formatPercent(weight.usedClassPercent)})"
+    }
+  }
+
+  private def reachableClasses(weight: StrictDepsModuleWeightComparison): String = {
+    if (weight.reachableClassCount == 0) {
+      "zero"
+    } else {
+      s"${weight.reachableClassCount} / ${weight.reachableClassTotalCount} (${formatPercent(weight.reachableClassPercent)})"
+    }
+  }
+
+  private def reachableSources(weight: StrictDepsModuleWeightComparison): String = {
+    if (weight.reachableSourceCount == 0) {
+      "zero"
+    } else {
+      s"${weight.reachableSourceCount} / ${weight.reachableSourceTotalCount} (${formatPercent(weight.reachableSourcePercent)})"
     }
   }
 
@@ -541,6 +587,8 @@ object StrictDepsCompileDepthRenderer {
       deltaLinesWidth: Int,
       ownClassesWidth: Int,
       usedClassesWidth: Int,
+      reachableClassesWidth: Int,
+      reachableSourcesWidth: Int,
       absoluteClassesWidth: Int,
       noteWidth: Int,
       showNotes: Boolean
@@ -557,6 +605,8 @@ object StrictDepsCompileDepthRenderer {
         2 + deltaLinesWidth +
         2 + ownClassesWidth +
         2 + usedClassesWidth +
+        2 + reachableClassesWidth +
+        2 + reachableSourcesWidth +
         2 + absoluteClassesWidth +
         (if (showNotes) 2 + noteWidth else 0)
     }
@@ -579,6 +629,8 @@ object StrictDepsCompileDepthRenderer {
       deltaLines: String,
       ownClasses: String,
       usedClasses: String,
+      reachableClasses: String,
+      reachableSources: String,
       absoluteClasses: String,
       note: String
   )

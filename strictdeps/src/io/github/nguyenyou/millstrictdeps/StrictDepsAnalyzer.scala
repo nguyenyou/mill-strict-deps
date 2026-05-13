@@ -40,9 +40,15 @@ object StrictDepsAnalyzer {
       analyzedModules = analyzedZincModules,
       ignoredModuleNames = ignoredModuleNames
     )
+    val reachabilityByModule = reachability.modules.map(module => module.moduleName -> module).toMap
+    val reachableDependencySources = reachability.modules.flatMap(_.reachableSources).toSet
     val usedClassesByModule = usedDependencyClassesByModule(
       usedExternalClasses = usedExternalClasses,
       dependencyModules = zincDependencyModules
+    )
+    val introducedByModuleNames = introducedByModuleNamesByModule(
+      directModuleNames = directModuleNames,
+      dependencyModules = millDependencyModules ++ zincDependencyModules
     )
     val millDependencyWeightSources = computeDependencyWeightSources(
       dependencyModules = millDependencyModules,
@@ -59,9 +65,11 @@ object StrictDepsAnalyzer {
         val zincWeight = zincDependencyWeightSources.get(moduleName)
         val usedClassCount = usedClassesByModule.getOrElse(moduleName, Set.empty).size
         val usedClassTotalCount = zincWeight.map(_.ownClassCount).getOrElse(0)
+        val moduleReachability = reachabilityByModule.get(moduleName)
         StrictDepsModuleWeightComparison(
           moduleName = moduleName,
           declaredDirect = directModuleNames.contains(moduleName),
+          introducedByModuleNames = introducedByModuleNames.getOrElse(moduleName, Seq.empty),
           ownSources = StrictDepsSourceWeightComparison(
             millSourceCount = millWeight.map(_.ownSources.size).getOrElse(0),
             zincSourceCount = zincWeight.map(_.ownSources.size).getOrElse(0)
@@ -82,7 +90,13 @@ object StrictDepsAnalyzer {
           absoluteClassCount = zincWeight.map(_.absoluteClassCount).getOrElse(0),
           usedClassCount = usedClassCount,
           usedClassTotalCount = usedClassTotalCount,
-          usedClassPercent = percent(usedClassCount, usedClassTotalCount)
+          usedClassPercent = percent(usedClassCount, usedClassTotalCount),
+          reachableClassCount = moduleReachability.map(_.reachableClassCount).getOrElse(0),
+          reachableClassTotalCount = moduleReachability.map(_.providedClassCount).getOrElse(0),
+          reachableClassPercent = moduleReachability.map(_.reachableClassPercent).getOrElse(0.0),
+          reachableSourceCount = moduleReachability.map(_.reachableSourceCount).getOrElse(0),
+          reachableSourceTotalCount = moduleReachability.map(_.providedSourceCount).getOrElse(0),
+          reachableSourcePercent = moduleReachability.map(_.reachableSourcePercent).getOrElse(0.0)
         )
       }
     val sortedDependencyWeightModuleNames = dependencyWeightsWithoutDelta
@@ -101,6 +115,10 @@ object StrictDepsAnalyzer {
         .getOrElse(weight.moduleName, DeltaSourceMetrics.empty)
       val zincDeltaMetrics = zincDeltaSourceMetrics
         .getOrElse(weight.moduleName, DeltaSourceMetrics.empty)
+      val reachableDeltaSourceCount = zincDeltaMetrics.sources.count(reachableDependencySources.contains)
+      val wastedDeltaSourceCount = (zincDeltaMetrics.sourceCount - reachableDeltaSourceCount).max(0)
+      val wastedOwnSourceCount = (weight.ownSources.zincSourceCount - weight.reachableSourceCount).max(0)
+      val wastedClassCount = (weight.reachableClassTotalCount - weight.reachableClassCount).max(0)
       weight.copy(
         deltaSources = StrictDepsSourceWeightComparison(
           millSourceCount = millDeltaMetrics.sourceCount,
@@ -109,7 +127,12 @@ object StrictDepsAnalyzer {
         deltaSourceLines = StrictDepsSourceWeightComparison(
           millSourceCount = millDeltaMetrics.sourceLineCount,
           zincSourceCount = zincDeltaMetrics.sourceLineCount
-        )
+        ),
+        reachableDeltaSourceCount = reachableDeltaSourceCount,
+        wastedDeltaSourceCount = wastedDeltaSourceCount,
+        wastedDeltaSourcePercent = percent(wastedDeltaSourceCount, zincDeltaMetrics.sourceCount),
+        wastedOwnSourceCount = wastedOwnSourceCount,
+        wastedClassCount = wastedClassCount
       )
     }
     val compileDepthDataWithoutDepthDelta = compileDepthReport(
@@ -268,6 +291,158 @@ object StrictDepsAnalyzer {
       moduleCount = moduleNames.size,
       commonAncestorCount = ancestors.count(_.isCommonAncestor),
       ancestors = ancestors
+    )
+  }
+
+  def compileWasteSnapshot(
+      moduleName: String,
+      report: StrictDepsWeightReport
+  ): StrictDepsCompileWasteSnapshot = {
+    val dependencies = report.dependencyWeights
+      .map { weight =>
+        StrictDepsCompileWasteDependency(
+          moduleName = weight.moduleName,
+          declaredDirect = weight.declaredDirect,
+          introducedByModuleNames = weight.introducedByModuleNames,
+          ownSourceCount = weight.ownSources.zincSourceCount,
+          reachableSourceCount = weight.reachableSourceCount,
+          wastedOwnSourceCount = weight.wastedOwnSourceCount,
+          reachableSourcePercent = weight.reachableSourcePercent,
+          deltaSourceCount = weight.deltaSources.zincSourceCount,
+          reachableDeltaSourceCount = weight.reachableDeltaSourceCount,
+          wastedDeltaSourceCount = weight.wastedDeltaSourceCount,
+          wastedDeltaSourcePercent = weight.wastedDeltaSourcePercent,
+          ownClassCount = weight.ownClassCount,
+          reachableClassCount = weight.reachableClassCount,
+          wastedClassCount = weight.wastedClassCount,
+          reachableClassPercent = weight.reachableClassPercent
+        )
+      }
+      .sortBy { dependency =>
+        (
+          -dependency.wastedDeltaSourceCount,
+          -dependency.wastedOwnSourceCount,
+          -dependency.deltaSourceCount,
+          if (dependency.declaredDirect) 0 else 1,
+          dependency.moduleName
+        )
+      }
+
+    StrictDepsCompileWasteSnapshot(
+      moduleName = moduleName,
+      dependencySourceCount = report.dependencySources.zincSourceCount,
+      reachableDependencySourceCount = report.reachability.reachableSourceCount,
+      wastedDependencySourceCount = report.reachability.unusedSourceCount,
+      dependencyClassCount = report.dependencyClassCount,
+      reachableDependencyClassCount = report.reachability.reachableClassCount,
+      wastedDependencyClassCount = report.reachability.unusedClassCount,
+      deltaSourceCount = dependencies.map(_.deltaSourceCount).sum,
+      reachableDeltaSourceCount = dependencies.map(_.reachableDeltaSourceCount).sum,
+      wastedDeltaSourceCount = dependencies.map(_.wastedDeltaSourceCount).sum,
+      dependencies = dependencies
+    )
+  }
+
+  def compileWasteGlobalReport(
+      snapshots: Seq[StrictDepsCompileWasteSnapshot]
+  ): StrictDepsCompileWasteGlobalReport = {
+    val edgeInputs = snapshots.flatMap { snapshot =>
+      snapshot.dependencies.map(dependency => snapshot.moduleName -> dependency)
+    }
+    val totalDeltaSourceCount = edgeInputs.map { case (_, dependency) =>
+      dependency.deltaSourceCount
+    }.sum
+    val totalReachableDeltaSourceCount = edgeInputs.map { case (_, dependency) =>
+      dependency.reachableDeltaSourceCount
+    }.sum
+    val totalWastedDeltaSourceCount = edgeInputs.map { case (_, dependency) =>
+      dependency.wastedDeltaSourceCount
+    }.sum
+    val badNodes = edgeInputs
+      .groupMap { case (_, dependency) => dependency.moduleName }(identity)
+      .toSeq
+      .map { case (moduleName, entries) =>
+        val dependencies = entries.map { case (_, dependency) => dependency }
+        val neededByModuleNames = entries.map { case (rootModuleName, _) => rootModuleName }.distinct
+        val directNeededByModuleNames = entries.collect {
+          case (rootModuleName, dependency) if dependency.declaredDirect => rootModuleName
+        }.distinct
+        val totalOwnSourceCount = dependencies.map(_.ownSourceCount).sum
+        val totalReachableSourceCount = dependencies.map(_.reachableSourceCount).sum
+        val totalOwnClassCount = dependencies.map(_.ownClassCount).sum
+        val totalReachableClassCount = dependencies.map(_.reachableClassCount).sum
+        val nodeTotalDeltaSourceCount = dependencies.map(_.deltaSourceCount).sum
+        val nodeTotalReachableDeltaSourceCount = dependencies.map(_.reachableDeltaSourceCount).sum
+        val nodeTotalWastedDeltaSourceCount = dependencies.map(_.wastedDeltaSourceCount).sum
+
+        StrictDepsCompileWasteNode(
+          moduleName = moduleName,
+          neededByModuleCount = neededByModuleNames.size,
+          directNeededByModuleCount = directNeededByModuleNames.size,
+          totalDeltaSourceCount = nodeTotalDeltaSourceCount,
+          totalReachableDeltaSourceCount = nodeTotalReachableDeltaSourceCount,
+          totalWastedDeltaSourceCount = nodeTotalWastedDeltaSourceCount,
+          wastedDeltaSourcePercent = percent(nodeTotalWastedDeltaSourceCount, nodeTotalDeltaSourceCount),
+          totalOwnSourceCount = totalOwnSourceCount,
+          totalReachableSourceCount = totalReachableSourceCount,
+          totalWastedOwnSourceCount = dependencies.map(_.wastedOwnSourceCount).sum,
+          reachableSourcePercent = percent(totalReachableSourceCount, totalOwnSourceCount),
+          maxOwnClassCount = dependencies.map(_.ownClassCount).maxOption.getOrElse(0),
+          totalReachableClassCount = totalReachableClassCount,
+          totalWastedClassCount = dependencies.map(_.wastedClassCount).sum,
+          reachableClassPercent = percent(totalReachableClassCount, totalOwnClassCount)
+        )
+      }
+      .sortBy { node =>
+        (
+          -node.totalWastedDeltaSourceCount,
+          -node.totalWastedOwnSourceCount,
+          -node.neededByModuleCount,
+          -node.totalDeltaSourceCount,
+          node.moduleName
+        )
+      }
+    val badEdges = edgeInputs
+      .map { case (rootModuleName, dependency) =>
+        StrictDepsCompileWasteEdge(
+          moduleName = rootModuleName,
+          dependencyModuleName = dependency.moduleName,
+          relationship = dependency.relationship,
+          introducedByModuleNames = dependency.introducedByModuleNames,
+          deltaSourceCount = dependency.deltaSourceCount,
+          reachableDeltaSourceCount = dependency.reachableDeltaSourceCount,
+          wastedDeltaSourceCount = dependency.wastedDeltaSourceCount,
+          wastedDeltaSourcePercent = dependency.wastedDeltaSourcePercent,
+          ownSourceCount = dependency.ownSourceCount,
+          reachableSourceCount = dependency.reachableSourceCount,
+          wastedOwnSourceCount = dependency.wastedOwnSourceCount,
+          reachableSourcePercent = dependency.reachableSourcePercent,
+          ownClassCount = dependency.ownClassCount,
+          reachableClassCount = dependency.reachableClassCount,
+          wastedClassCount = dependency.wastedClassCount,
+          reachableClassPercent = dependency.reachableClassPercent
+        )
+      }
+      .sortBy { edge =>
+        (
+          -edge.wastedDeltaSourceCount,
+          -edge.wastedOwnSourceCount,
+          -edge.deltaSourceCount,
+          edge.moduleName,
+          edge.dependencyModuleName
+        )
+      }
+
+    StrictDepsCompileWasteGlobalReport(
+      rootModuleCount = snapshots.map(_.moduleName).distinct.size,
+      dependencyModuleCount = edgeInputs.map { case (_, dependency) => dependency.moduleName }.distinct.size,
+      dependencyEdgeCount = edgeInputs.size,
+      totalDeltaSourceCount = totalDeltaSourceCount,
+      totalReachableDeltaSourceCount = totalReachableDeltaSourceCount,
+      totalWastedDeltaSourceCount = totalWastedDeltaSourceCount,
+      wastedDeltaSourcePercent = percent(totalWastedDeltaSourceCount, totalDeltaSourceCount),
+      badNodes = badNodes,
+      badEdges = badEdges
     )
   }
 
@@ -594,9 +769,29 @@ object StrictDepsAnalyzer {
       seenSources ++= absoluteSources
 
       moduleName -> DeltaSourceMetrics(
+        sources = deltaSources,
         sourceCount = deltaSources.size,
         sourceLineCount = sourceLineCount(deltaSources, absoluteSourceLinesBySource)
       )
+    }.toMap
+  }
+
+  private def introducedByModuleNamesByModule(
+      directModuleNames: Set[String],
+      dependencyModules: Seq[DependencyModule]
+  ): Map[String, Seq[String]] = {
+    val dependencyGraph = dependencyModules
+      .groupMapReduce(_.moduleName)(_.directDependencyModuleNames.toSet)(_ ++ _)
+    val moduleNames = dependencyModules.map(_.moduleName).toSet
+    val closuresByDirectModule = directModuleNames.toSeq.sorted.map { directModuleName =>
+      directModuleName -> dependencyModuleClosure(directModuleName, dependencyGraph)
+    }
+
+    moduleNames.toSeq.sorted.map { moduleName =>
+      val introducedBy = closuresByDirectModule.collect {
+        case (directModuleName, closure) if closure.contains(moduleName) => directModuleName
+      }
+      moduleName -> introducedBy
     }.toMap
   }
 
@@ -982,12 +1177,14 @@ object StrictDepsAnalyzer {
   )
 
   private final case class DeltaSourceMetrics(
+      sources: Set[String],
       sourceCount: Int,
       sourceLineCount: Int
   )
 
   private object DeltaSourceMetrics {
     val empty: DeltaSourceMetrics = DeltaSourceMetrics(
+      sources = Set.empty,
       sourceCount = 0,
       sourceLineCount = 0
     )

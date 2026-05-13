@@ -96,7 +96,19 @@ final case class StrictDepsModuleWeightComparison(
     absoluteClassCount: Int = 0,
     usedClassCount: Int = 0,
     usedClassTotalCount: Int = 0,
-    usedClassPercent: Double = 0.0
+    usedClassPercent: Double = 0.0,
+    reachableClassCount: Int = 0,
+    reachableClassTotalCount: Int = 0,
+    reachableClassPercent: Double = 0.0,
+    reachableSourceCount: Int = 0,
+    reachableSourceTotalCount: Int = 0,
+    reachableSourcePercent: Double = 0.0,
+    reachableDeltaSourceCount: Int = 0,
+    wastedDeltaSourceCount: Int = 0,
+    wastedDeltaSourcePercent: Double = 0.0,
+    wastedOwnSourceCount: Int = 0,
+    wastedClassCount: Int = 0,
+    introducedByModuleNames: Seq[String] = Seq.empty
 )
 
 final case class StrictDepsCompileDepth(
@@ -124,6 +136,103 @@ final case class StrictDepsGraphModule(
 object StrictDepsGraphModule {
   given ReadWriter[StrictDepsGraphModule] = macroRW
 }
+
+final case class StrictDepsCompileWasteSnapshot(
+    moduleName: String,
+    dependencySourceCount: Int,
+    reachableDependencySourceCount: Int,
+    wastedDependencySourceCount: Int,
+    dependencyClassCount: Int,
+    reachableDependencyClassCount: Int,
+    wastedDependencyClassCount: Int,
+    deltaSourceCount: Int,
+    reachableDeltaSourceCount: Int,
+    wastedDeltaSourceCount: Int,
+    dependencies: Seq[StrictDepsCompileWasteDependency]
+)
+
+object StrictDepsCompileWasteSnapshot {
+  given ReadWriter[StrictDepsCompileWasteSnapshot] = macroRW
+}
+
+final case class StrictDepsCompileWasteDependency(
+    moduleName: String,
+    declaredDirect: Boolean,
+    introducedByModuleNames: Seq[String],
+    ownSourceCount: Int,
+    reachableSourceCount: Int,
+    wastedOwnSourceCount: Int,
+    reachableSourcePercent: Double,
+    deltaSourceCount: Int,
+    reachableDeltaSourceCount: Int,
+    wastedDeltaSourceCount: Int,
+    wastedDeltaSourcePercent: Double,
+    ownClassCount: Int,
+    reachableClassCount: Int,
+    wastedClassCount: Int,
+    reachableClassPercent: Double
+) {
+  def relationship: String = {
+    if (declaredDirect) {
+      "direct"
+    } else {
+      "transitive"
+    }
+  }
+}
+
+object StrictDepsCompileWasteDependency {
+  given ReadWriter[StrictDepsCompileWasteDependency] = macroRW
+}
+
+final case class StrictDepsCompileWasteGlobalReport(
+    rootModuleCount: Int,
+    dependencyModuleCount: Int,
+    dependencyEdgeCount: Int,
+    totalDeltaSourceCount: Int,
+    totalReachableDeltaSourceCount: Int,
+    totalWastedDeltaSourceCount: Int,
+    wastedDeltaSourcePercent: Double,
+    badNodes: Seq[StrictDepsCompileWasteNode],
+    badEdges: Seq[StrictDepsCompileWasteEdge]
+)
+
+final case class StrictDepsCompileWasteNode(
+    moduleName: String,
+    neededByModuleCount: Int,
+    directNeededByModuleCount: Int,
+    totalDeltaSourceCount: Int,
+    totalReachableDeltaSourceCount: Int,
+    totalWastedDeltaSourceCount: Int,
+    wastedDeltaSourcePercent: Double,
+    totalOwnSourceCount: Int,
+    totalReachableSourceCount: Int,
+    totalWastedOwnSourceCount: Int,
+    reachableSourcePercent: Double,
+    maxOwnClassCount: Int,
+    totalReachableClassCount: Int,
+    totalWastedClassCount: Int,
+    reachableClassPercent: Double
+)
+
+final case class StrictDepsCompileWasteEdge(
+    moduleName: String,
+    dependencyModuleName: String,
+    relationship: String,
+    introducedByModuleNames: Seq[String],
+    deltaSourceCount: Int,
+    reachableDeltaSourceCount: Int,
+    wastedDeltaSourceCount: Int,
+    wastedDeltaSourcePercent: Double,
+    ownSourceCount: Int,
+    reachableSourceCount: Int,
+    wastedOwnSourceCount: Int,
+    reachableSourcePercent: Double,
+    ownClassCount: Int,
+    reachableClassCount: Int,
+    wastedClassCount: Int,
+    reachableClassPercent: Double
+)
 
 final case class StrictDepsCommonAncestorReport(
     rootModuleCount: Int,

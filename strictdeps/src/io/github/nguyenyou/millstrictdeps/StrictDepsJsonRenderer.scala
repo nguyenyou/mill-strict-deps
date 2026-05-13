@@ -4,13 +4,23 @@ import ujson.*
 
 object StrictDepsJsonRenderer {
 
-  def render(moduleName: String, report: StrictDepsReport): String = {
-    write(toJson(moduleName, report), indent = 2) + "\n"
+  def render(
+      moduleName: String,
+      report: StrictDepsReport,
+      weightReport: Option[StrictDepsWeightReport] = None,
+      compileWaste: Option[StrictDepsCompileWasteSnapshot] = None
+  ): String = {
+    write(toJson(moduleName, report, weightReport, compileWaste), indent = 2) + "\n"
   }
 
-  private def toJson(moduleName: String, report: StrictDepsReport): Value = {
-    Obj(
-      "schemaVersion" -> Num(3),
+  private def toJson(
+      moduleName: String,
+      report: StrictDepsReport,
+      weightReport: Option[StrictDepsWeightReport],
+      compileWaste: Option[StrictDepsCompileWasteSnapshot]
+  ): Value = {
+    val json = Obj(
+      "schemaVersion" -> Num(4),
       "moduleName" -> Str(moduleName),
       "hasProblems" -> Bool(report.hasProblems),
       "summary" -> Obj(
@@ -36,6 +46,15 @@ object StrictDepsJsonRenderer {
       "reachability" -> reachabilityJson(report.reachability),
       "usedLibraryClasspathEntries" -> stringArray(report.usedLibraryClasspathEntries)
     )
+
+    weightReport.foreach { report =>
+      json("weightReport") = weightReportJson(report)
+    }
+    compileWaste.foreach { snapshot =>
+      json("compileWaste") = compileWasteJson(snapshot)
+    }
+
+    json
   }
 
   private def usageJson(usage: StrictDepsModuleUsage): Value = {
@@ -117,6 +136,111 @@ object StrictDepsJsonRenderer {
       "directUsedSources" -> stringArray(module.directUsedSources),
       "reachableSources" -> stringArray(module.reachableSources),
       "unusedSources" -> stringArray(module.unusedSources)
+    )
+  }
+
+  private def weightReportJson(report: StrictDepsWeightReport): Value = {
+    Obj(
+      "currentModuleSources" -> sourceComparisonJson(report.currentModuleSources),
+      "dependencySources" -> sourceComparisonJson(report.dependencySources),
+      "totalSources" -> sourceComparisonJson(report.totalSources),
+      "currentModuleSourceLines" -> sourceComparisonJson(report.currentModuleSourceLines),
+      "dependencySourceLines" -> sourceComparisonJson(report.dependencySourceLines),
+      "totalSourceLines" -> sourceComparisonJson(report.totalSourceLines),
+      "currentModuleClassCount" -> Num(report.currentModuleClassCount),
+      "dependencyClassCount" -> Num(report.dependencyClassCount),
+      "totalClassCount" -> Num(report.totalClassCount),
+      "dependencyWeights" -> Arr.from(report.dependencyWeights.map(moduleWeightComparisonJson)),
+      "compileDepths" -> Arr.from(report.compileDepths.map(compileDepthJson)),
+      "targetDepthIndex" -> Num(report.targetDepthIndex),
+      "reachability" -> reachabilityJson(report.reachability)
+    )
+  }
+
+  private def sourceComparisonJson(comparison: StrictDepsSourceWeightComparison): Value = {
+    Obj(
+      "millSourceCount" -> Num(comparison.millSourceCount),
+      "zincSourceCount" -> Num(comparison.zincSourceCount),
+      "matches" -> Bool(comparison.matches),
+      "maxSourceCount" -> Num(comparison.maxSourceCount)
+    )
+  }
+
+  private def moduleWeightComparisonJson(weight: StrictDepsModuleWeightComparison): Value = {
+    Obj(
+      "moduleName" -> Str(weight.moduleName),
+      "declaredDirect" -> Bool(weight.declaredDirect),
+      "relationship" -> Str(if (weight.declaredDirect) "direct" else "transitive"),
+      "ownSources" -> sourceComparisonJson(weight.ownSources),
+      "absoluteSources" -> sourceComparisonJson(weight.absoluteSources),
+      "deltaSources" -> sourceComparisonJson(weight.deltaSources),
+      "compileDepthDeltaSources" -> sourceComparisonJson(weight.compileDepthDeltaSources),
+      "ownSourceLines" -> sourceComparisonJson(weight.ownSourceLines),
+      "absoluteSourceLines" -> sourceComparisonJson(weight.absoluteSourceLines),
+      "deltaSourceLines" -> sourceComparisonJson(weight.deltaSourceLines),
+      "compileDepthDeltaSourceLines" -> sourceComparisonJson(weight.compileDepthDeltaSourceLines),
+      "ownClassCount" -> Num(weight.ownClassCount),
+      "absoluteClassCount" -> Num(weight.absoluteClassCount),
+      "usedClassCount" -> Num(weight.usedClassCount),
+      "usedClassTotalCount" -> Num(weight.usedClassTotalCount),
+      "usedClassPercent" -> Num(weight.usedClassPercent),
+      "reachableClassCount" -> Num(weight.reachableClassCount),
+      "reachableClassTotalCount" -> Num(weight.reachableClassTotalCount),
+      "reachableClassPercent" -> Num(weight.reachableClassPercent),
+      "reachableSourceCount" -> Num(weight.reachableSourceCount),
+      "reachableSourceTotalCount" -> Num(weight.reachableSourceTotalCount),
+      "reachableSourcePercent" -> Num(weight.reachableSourcePercent),
+      "reachableDeltaSourceCount" -> Num(weight.reachableDeltaSourceCount),
+      "wastedDeltaSourceCount" -> Num(weight.wastedDeltaSourceCount),
+      "wastedDeltaSourcePercent" -> Num(weight.wastedDeltaSourcePercent),
+      "wastedOwnSourceCount" -> Num(weight.wastedOwnSourceCount),
+      "wastedClassCount" -> Num(weight.wastedClassCount),
+      "introducedByModuleNames" -> stringArray(weight.introducedByModuleNames)
+    )
+  }
+
+  private def compileDepthJson(depth: StrictDepsCompileDepth): Value = {
+    Obj(
+      "index" -> Num(depth.index),
+      "moduleCount" -> Num(depth.modules.size),
+      "modules" -> Arr.from(depth.modules.map(moduleWeightComparisonJson))
+    )
+  }
+
+  private def compileWasteJson(snapshot: StrictDepsCompileWasteSnapshot): Value = {
+    Obj(
+      "moduleName" -> Str(snapshot.moduleName),
+      "dependencySourceCount" -> Num(snapshot.dependencySourceCount),
+      "reachableDependencySourceCount" -> Num(snapshot.reachableDependencySourceCount),
+      "wastedDependencySourceCount" -> Num(snapshot.wastedDependencySourceCount),
+      "dependencyClassCount" -> Num(snapshot.dependencyClassCount),
+      "reachableDependencyClassCount" -> Num(snapshot.reachableDependencyClassCount),
+      "wastedDependencyClassCount" -> Num(snapshot.wastedDependencyClassCount),
+      "deltaSourceCount" -> Num(snapshot.deltaSourceCount),
+      "reachableDeltaSourceCount" -> Num(snapshot.reachableDeltaSourceCount),
+      "wastedDeltaSourceCount" -> Num(snapshot.wastedDeltaSourceCount),
+      "dependencies" -> Arr.from(snapshot.dependencies.map(compileWasteDependencyJson))
+    )
+  }
+
+  private def compileWasteDependencyJson(dependency: StrictDepsCompileWasteDependency): Value = {
+    Obj(
+      "moduleName" -> Str(dependency.moduleName),
+      "declaredDirect" -> Bool(dependency.declaredDirect),
+      "relationship" -> Str(dependency.relationship),
+      "introducedByModuleNames" -> stringArray(dependency.introducedByModuleNames),
+      "ownSourceCount" -> Num(dependency.ownSourceCount),
+      "reachableSourceCount" -> Num(dependency.reachableSourceCount),
+      "wastedOwnSourceCount" -> Num(dependency.wastedOwnSourceCount),
+      "reachableSourcePercent" -> Num(dependency.reachableSourcePercent),
+      "deltaSourceCount" -> Num(dependency.deltaSourceCount),
+      "reachableDeltaSourceCount" -> Num(dependency.reachableDeltaSourceCount),
+      "wastedDeltaSourceCount" -> Num(dependency.wastedDeltaSourceCount),
+      "wastedDeltaSourcePercent" -> Num(dependency.wastedDeltaSourcePercent),
+      "ownClassCount" -> Num(dependency.ownClassCount),
+      "reachableClassCount" -> Num(dependency.reachableClassCount),
+      "wastedClassCount" -> Num(dependency.wastedClassCount),
+      "reachableClassPercent" -> Num(dependency.reachableClassPercent)
     )
   }
 

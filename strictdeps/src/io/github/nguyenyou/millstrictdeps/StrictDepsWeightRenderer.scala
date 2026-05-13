@@ -12,6 +12,8 @@ object StrictDepsWeightRenderer {
   private val DeltaLinesHeader = "delta lines"
   private val OwnClassesHeader = "own classes"
   private val UsedClassesHeader = "used classes"
+  private val ReachableClassesHeader = "reachable classes"
+  private val ReachableSourcesHeader = "reachable sources"
   private val AbsoluteClassesHeader = "absolute classes"
   private val SourceCountHeader = "count"
   private val NoteHeader = "note"
@@ -34,7 +36,8 @@ object StrictDepsWeightRenderer {
           weight.moduleName
         )
       }
-      val rows = sortedWeights.map(renderedRow)
+      val reachabilityByModule = report.reachability.modules.map(module => module.moduleName -> module).toMap
+      val rows = sortedWeights.map(weight => renderedRow(weight, reachabilityByModule))
       val showNotes = rows.exists(_.note.nonEmpty)
       val moduleWidth = maxWidth(ModuleHeader +: rows.map(_.moduleName))
       val relationshipWidth = maxWidth(RelationshipHeader +: rows.map(_.relationship))
@@ -46,6 +49,8 @@ object StrictDepsWeightRenderer {
       val deltaLinesWidth = maxWidth(DeltaLinesHeader +: rows.map(_.deltaLines))
       val ownClassesWidth = maxWidth(OwnClassesHeader +: rows.map(_.ownClasses))
       val usedClassesWidth = maxWidth(UsedClassesHeader +: rows.map(_.usedClasses))
+      val reachableClassesWidth = maxWidth(ReachableClassesHeader +: rows.map(_.reachableClasses))
+      val reachableSourcesWidth = maxWidth(ReachableSourcesHeader +: rows.map(_.reachableSources))
       val absoluteClassesWidth = maxWidth(AbsoluteClassesHeader +: rows.map(_.absoluteClasses))
       val noteWidth = maxWidth(NoteHeader +: rows.map(_.note))
 
@@ -68,6 +73,10 @@ object StrictDepsWeightRenderer {
       builder.append(padLeft(OwnClassesHeader, ownClassesWidth))
       builder.append("  ")
       builder.append(padLeft(UsedClassesHeader, usedClassesWidth))
+      builder.append("  ")
+      builder.append(padLeft(ReachableClassesHeader, reachableClassesWidth))
+      builder.append("  ")
+      builder.append(padLeft(ReachableSourcesHeader, reachableSourcesWidth))
       builder.append("  ")
       builder.append(padLeft(AbsoluteClassesHeader, absoluteClassesWidth))
       if (showNotes) {
@@ -95,6 +104,10 @@ object StrictDepsWeightRenderer {
       builder.append("-" * ownClassesWidth)
       builder.append("  ")
       builder.append("-" * usedClassesWidth)
+      builder.append("  ")
+      builder.append("-" * reachableClassesWidth)
+      builder.append("  ")
+      builder.append("-" * reachableSourcesWidth)
       builder.append("  ")
       builder.append("-" * absoluteClassesWidth)
       if (showNotes) {
@@ -124,6 +137,10 @@ object StrictDepsWeightRenderer {
         builder.append("  ")
         builder.append(padLeft(row.usedClasses, usedClassesWidth))
         builder.append("  ")
+        builder.append(padLeft(row.reachableClasses, reachableClassesWidth))
+        builder.append("  ")
+        builder.append(padLeft(row.reachableSources, reachableSourcesWidth))
+        builder.append("  ")
         builder.append(padLeft(row.absoluteClasses, absoluteClassesWidth))
         if (showNotes) {
           builder.append("  ")
@@ -144,7 +161,10 @@ object StrictDepsWeightRenderer {
     }
   }
 
-  private def renderedRow(weight: StrictDepsModuleWeightComparison): RenderedWeightRow = {
+  private def renderedRow(
+      weight: StrictDepsModuleWeightComparison,
+      reachabilityByModule: Map[String, StrictDepsModuleReachability]
+  ): RenderedWeightRow = {
     RenderedWeightRow(
       moduleName = display(weight.moduleName),
       relationship = relationship(weight),
@@ -156,6 +176,8 @@ object StrictDepsWeightRenderer {
       deltaLines = formatComparison(weight.deltaSourceLines),
       ownClasses = weight.ownClassCount.toString,
       usedClasses = usedClasses(weight),
+      reachableClasses = reachableClasses(weight, reachabilityByModule),
+      reachableSources = reachableSources(weight, reachabilityByModule),
       absoluteClasses = weight.absoluteClassCount.toString,
       note = rowNote(weight)
     )
@@ -166,6 +188,42 @@ object StrictDepsWeightRenderer {
       "zero"
     } else {
       s"${weight.usedClassCount} / ${weight.usedClassTotalCount} (${formatPercent(weight.usedClassPercent)})"
+    }
+  }
+
+  private def reachableClasses(
+      weight: StrictDepsModuleWeightComparison,
+      reachabilityByModule: Map[String, StrictDepsModuleReachability]
+  ): String = {
+    reachabilityByModule.get(weight.moduleName) match {
+      case Some(reachability) if reachability.reachableClassCount == 0 =>
+        "zero"
+      case Some(reachability) =>
+        formatReachability(
+          reached = reachability.reachableClassCount,
+          total = reachability.providedClassCount,
+          percent = reachability.reachableClassPercent
+        )
+      case None =>
+        ""
+    }
+  }
+
+  private def reachableSources(
+      weight: StrictDepsModuleWeightComparison,
+      reachabilityByModule: Map[String, StrictDepsModuleReachability]
+  ): String = {
+    reachabilityByModule.get(weight.moduleName) match {
+      case Some(reachability) if reachability.reachableSourceCount == 0 =>
+        "zero"
+      case Some(reachability) =>
+        formatReachability(
+          reached = reachability.reachableSourceCount,
+          total = reachability.providedSourceCount,
+          percent = reachability.reachableSourcePercent
+        )
+      case None =>
+        ""
     }
   }
 
@@ -382,6 +440,8 @@ object StrictDepsWeightRenderer {
       deltaLines: String,
       ownClasses: String,
       usedClasses: String,
+      reachableClasses: String,
+      reachableSources: String,
       absoluteClasses: String,
       note: String
   )

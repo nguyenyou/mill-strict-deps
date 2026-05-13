@@ -102,7 +102,11 @@ trait StrictDepsModule extends ScalaModule { outer =>
       Task.Anon {
         StrictDepsModuleSnapshot(
           moduleName = module.toString,
-          analysisFile = module.compile().analysisFile
+          analysisFile = module.compile().analysisFile,
+          directDependencyModuleNames = directCompileModules(module)
+            .map(_.toString)
+            .distinct
+            .sorted
         )
       }
     }()
@@ -116,6 +120,10 @@ trait StrictDepsModule extends ScalaModule { outer =>
   }
 
   private def directCompileModules: Seq[JavaModule] = {
-    (outer.moduleDepsChecked ++ outer.compileModuleDepsChecked).distinct
+    directCompileModules(outer)
+  }
+
+  private def directCompileModules(module: JavaModule): Seq[JavaModule] = {
+    (module.moduleDepsChecked ++ module.compileModuleDepsChecked).distinct
   }
 }

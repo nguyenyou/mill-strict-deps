@@ -6,6 +6,7 @@ object StrictDepsWeightRenderer {
   private val RelationshipHeader = "relationship"
   private val OwnWeightHeader = "own weight"
   private val AbsoluteWeightHeader = "absolute weight"
+  private val DeltaWeightHeader = "delta weight"
   private val SourceCountHeader = "count"
   private val NoteHeader = "note"
 
@@ -29,6 +30,7 @@ object StrictDepsWeightRenderer {
       }
       val ownWeightValues = sortedWeights.map(weight => formatComparison(weight.ownSources))
       val absoluteWeightValues = sortedWeights.map(weight => formatComparison(weight.absoluteSources))
+      val deltaWeightValues = sortedWeights.map(weight => formatComparison(weight.deltaSources))
       val notes = sortedWeights.map(rowNote)
       val showNotes = notes.exists(_.nonEmpty)
       val moduleWidth = maxWidth(ModuleHeader +: sortedWeights.map(weight => display(weight.moduleName)))
@@ -36,6 +38,7 @@ object StrictDepsWeightRenderer {
         maxWidth(RelationshipHeader +: sortedWeights.map(relationship))
       val ownWeightWidth = maxWidth(OwnWeightHeader +: ownWeightValues)
       val absoluteWeightWidth = maxWidth(AbsoluteWeightHeader +: absoluteWeightValues)
+      val deltaWeightWidth = maxWidth(DeltaWeightHeader +: deltaWeightValues)
       val noteWidth = maxWidth(NoteHeader +: notes)
 
       builder.append(padRight(ModuleHeader, moduleWidth))
@@ -45,6 +48,8 @@ object StrictDepsWeightRenderer {
       builder.append(padLeft(OwnWeightHeader, ownWeightWidth))
       builder.append("  ")
       builder.append(padLeft(AbsoluteWeightHeader, absoluteWeightWidth))
+      builder.append("  ")
+      builder.append(padLeft(DeltaWeightHeader, deltaWeightWidth))
       if (showNotes) {
         builder.append("  ")
         builder.append(padRight(NoteHeader, noteWidth))
@@ -58,14 +63,16 @@ object StrictDepsWeightRenderer {
       builder.append("-" * ownWeightWidth)
       builder.append("  ")
       builder.append("-" * absoluteWeightWidth)
+      builder.append("  ")
+      builder.append("-" * deltaWeightWidth)
       if (showNotes) {
         builder.append("  ")
         builder.append("-" * noteWidth)
       }
       builder.append("\n")
 
-      sortedWeights.zip(ownWeightValues).zip(absoluteWeightValues).zip(notes).foreach {
-        case (((weight, ownValue), absoluteValue), note) =>
+      sortedWeights.zip(ownWeightValues).zip(absoluteWeightValues).zip(deltaWeightValues).zip(notes).foreach {
+        case ((((weight, ownValue), absoluteValue), deltaValue), note) =>
           builder.append(padRight(display(weight.moduleName), moduleWidth))
           builder.append("  ")
           builder.append(padRight(relationship(weight), relationshipWidth))
@@ -73,6 +80,8 @@ object StrictDepsWeightRenderer {
           builder.append(padLeft(ownValue, ownWeightWidth))
           builder.append("  ")
           builder.append(padLeft(absoluteValue, absoluteWeightWidth))
+          builder.append("  ")
+          builder.append(padLeft(deltaValue, deltaWeightWidth))
           if (showNotes) {
             builder.append("  ")
             builder.append(padRight(note, noteWidth))
@@ -148,7 +157,7 @@ object StrictDepsWeightRenderer {
       report.dependencySources,
       report.totalSources
     ) ++ report.dependencyWeights.flatMap { weight =>
-      Seq(weight.ownSources, weight.absoluteSources)
+      Seq(weight.ownSources, weight.absoluteSources, weight.deltaSources)
     }
 
     if (!comparisons.forall(_.matches)) {
@@ -178,7 +187,8 @@ object StrictDepsWeightRenderer {
   private def rowNote(weight: StrictDepsModuleWeightComparison): String = {
     Seq(
       "own" -> weight.ownSources,
-      "absolute" -> weight.absoluteSources
+      "absolute" -> weight.absoluteSources,
+      "delta" -> weight.deltaSources
     ).flatMap { case (label, comparison) =>
       Option.when(!comparison.matches) {
         s"$label Mill-Zinc ${formatSigned(comparison.millSourceCount - comparison.zincSourceCount)}"

@@ -69,7 +69,8 @@ final case class StrictDepsModuleWeightComparison(
     moduleName: String,
     declaredDirect: Boolean,
     ownSources: StrictDepsSourceWeightComparison,
-    absoluteSources: StrictDepsSourceWeightComparison
+    absoluteSources: StrictDepsSourceWeightComparison,
+    deltaSources: StrictDepsSourceWeightComparison = StrictDepsSourceWeightComparison(0, 0)
 )
 
 final case class StrictDepsCompileDepth(

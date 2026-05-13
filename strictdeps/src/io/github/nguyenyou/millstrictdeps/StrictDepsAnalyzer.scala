@@ -22,34 +22,51 @@ object StrictDepsAnalyzer {
     val zincDependencyModules = zincTransitiveModules.map(analyzeDependencyModule)
     val millDependencySources = millDependencyModules.flatMap(_.sources).toSet
     val zincDependencySources = zincDependencyModules.flatMap(_.sources).toSet
-    val millDependencyWeights = computeDependencyWeights(
-      directModuleNames = directModuleNames,
+    val millDependencyWeightSources = computeDependencyWeightSources(
       dependencyModules = millDependencyModules,
       ignoredModuleNames = ignoredModuleNames
     ).map(weight => weight.moduleName -> weight).toMap
-    val zincDependencyWeights = computeDependencyWeights(
-      directModuleNames = directModuleNames,
+    val zincDependencyWeightSources = computeDependencyWeightSources(
       dependencyModules = zincDependencyModules,
       ignoredModuleNames = ignoredModuleNames
     ).map(weight => weight.moduleName -> weight).toMap
-    val dependencyWeights = (millDependencyWeights.keySet ++ zincDependencyWeights.keySet).toSeq
+    val dependencyWeightsWithoutDelta = (millDependencyWeightSources.keySet ++ zincDependencyWeightSources.keySet).toSeq
       .sorted
       .map { moduleName =>
-        val millWeight = millDependencyWeights.get(moduleName)
-        val zincWeight = zincDependencyWeights.get(moduleName)
+        val millWeight = millDependencyWeightSources.get(moduleName)
+        val zincWeight = zincDependencyWeightSources.get(moduleName)
         StrictDepsModuleWeightComparison(
           moduleName = moduleName,
           declaredDirect = directModuleNames.contains(moduleName),
           ownSources = StrictDepsSourceWeightComparison(
-            millSourceCount = millWeight.map(_.ownSourceCount).getOrElse(0),
-            zincSourceCount = zincWeight.map(_.ownSourceCount).getOrElse(0)
+            millSourceCount = millWeight.map(_.ownSources.size).getOrElse(0),
+            zincSourceCount = zincWeight.map(_.ownSources.size).getOrElse(0)
           ),
           absoluteSources = StrictDepsSourceWeightComparison(
-            millSourceCount = millWeight.map(_.absoluteSourceCount).getOrElse(0),
-            zincSourceCount = zincWeight.map(_.absoluteSourceCount).getOrElse(0)
+            millSourceCount = millWeight.map(_.absoluteSources.size).getOrElse(0),
+            zincSourceCount = zincWeight.map(_.absoluteSources.size).getOrElse(0)
           )
         )
       }
+    val sortedDependencyWeightModuleNames = dependencyWeightsWithoutDelta
+      .sortBy(weightSortKey)
+      .map(_.moduleName)
+    val millDeltaSourceCounts = computeDeltaSourceCounts(
+      sortedModuleNames = sortedDependencyWeightModuleNames,
+      dependencyWeightSourcesByModule = millDependencyWeightSources
+    )
+    val zincDeltaSourceCounts = computeDeltaSourceCounts(
+      sortedModuleNames = sortedDependencyWeightModuleNames,
+      dependencyWeightSourcesByModule = zincDependencyWeightSources
+    )
+    val dependencyWeights = dependencyWeightsWithoutDelta.map { weight =>
+      weight.copy(
+        deltaSources = StrictDepsSourceWeightComparison(
+          millSourceCount = millDeltaSourceCounts.getOrElse(weight.moduleName, 0),
+          zincSourceCount = zincDeltaSourceCounts.getOrElse(weight.moduleName, 0)
+        )
+      )
+    }
     val compileDepthData = compileDepthReport(
       directModuleNames = directModuleNames,
       dependencyWeights = dependencyWeights,
@@ -298,6 +315,56 @@ object StrictDepsAnalyzer {
           weight.moduleName
         )
       }
+  }
+
+  private def computeDependencyWeightSources(
+      dependencyModules: Seq[DependencyModule],
+      ignoredModuleNames: Set[String]
+  ): Seq[DependencyWeightSources] = {
+    val dependencyGraph = dependencyModules
+      .map(module => module.moduleName -> module.directDependencyModuleNames.toSet)
+      .toMap
+    val sourcesByModule = dependencyModules
+      .map(module => module.moduleName -> module.sources)
+      .toMap
+
+    dependencyModules
+      .filterNot(module => ignoredModuleNames.contains(module.moduleName))
+      .map { module =>
+        val moduleClosure = dependencyModuleClosure(module.moduleName, dependencyGraph)
+
+        DependencyWeightSources(
+          moduleName = module.moduleName,
+          ownSources = module.sources,
+          absoluteSources = sourcesForModules(moduleClosure, sourcesByModule)
+        )
+      }
+  }
+
+  private def computeDeltaSourceCounts(
+      sortedModuleNames: Seq[String],
+      dependencyWeightSourcesByModule: Map[String, DependencyWeightSources]
+  ): Map[String, Int] = {
+    val seenSources = mutable.Set.empty[String]
+
+    sortedModuleNames.map { moduleName =>
+      val absoluteSources = dependencyWeightSourcesByModule
+        .get(moduleName)
+        .map(_.absoluteSources)
+        .getOrElse(Set.empty)
+      val deltaSourceCount = absoluteSources.count(source => !seenSources.contains(source))
+      seenSources ++= absoluteSources
+
+      moduleName -> deltaSourceCount
+    }.toMap
+  }
+
+  private def weightSortKey(weight: StrictDepsModuleWeightComparison): (Int, Int, String) = {
+    (
+      -weight.absoluteSources.maxSourceCount,
+      if (weight.declaredDirect) 0 else 1,
+      weight.moduleName
+    )
   }
 
   private def compileDepthReport(
@@ -590,6 +657,12 @@ object StrictDepsAnalyzer {
       moduleName: String,
       directDependencyModuleNames: Seq[String],
       sources: Set[String]
+  )
+
+  private final case class DependencyWeightSources(
+      moduleName: String,
+      ownSources: Set[String],
+      absoluteSources: Set[String]
   )
 
   private final case class CompileDepthData(

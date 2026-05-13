@@ -1,6 +1,7 @@
 package io.github.nguyenyou.millstrictdeps
 
 import mill.*
+import mill.api.PathRef
 import mill.api.Discover
 import mill.api.daemon.ExecResult
 import mill.scalalib.ScalaModule
@@ -270,6 +271,51 @@ object StrictDepsModuleTests extends TestSuite {
           case Right(_) =>
             ()
         }
+
+        def force[T](result: Either[?, UnitTester.Result[T]]): T = {
+          result.fold(
+            failure => throw new Exception(failure.toString),
+            success => success.value
+          )
+        }
+        def sourceFiles(files: Seq[PathRef]): Seq[String] = {
+          files.map(_.path.toString).distinct.sorted
+        }
+
+        val appCompile = force(eval(StrictDepsFixtureBuild.app.compile))
+        val apiCompile = force(eval(StrictDepsFixtureBuild.api.compile))
+        val domainCompile = force(eval(StrictDepsFixtureBuild.domain.compile))
+        val helperCompile = force(eval(StrictDepsFixtureBuild.helper.compile))
+        val serverCompile = force(eval(StrictDepsFixtureBuild.server.compile))
+        val apiSources = sourceFiles(force(eval(StrictDepsFixtureBuild.api.allSourceFiles)))
+        val domainSources = sourceFiles(force(eval(StrictDepsFixtureBuild.domain.allSourceFiles)))
+        val helperSources = sourceFiles(force(eval(StrictDepsFixtureBuild.helper.allSourceFiles)))
+        val serverSources = sourceFiles(force(eval(StrictDepsFixtureBuild.server.allSourceFiles)))
+
+        val report = StrictDepsAnalyzer.weightReport(
+          currentAnalysisFile = appCompile.analysisFile,
+          currentModuleSourceFiles = sourceFiles(force(eval(StrictDepsFixtureBuild.app.allSourceFiles))).toSet,
+          directModuleNames = Set("api", "helper", "server"),
+          millTransitiveModules = Seq(
+            StrictDepsModuleWeightSnapshot("api", apiSources, Seq("domain")),
+            StrictDepsModuleWeightSnapshot("domain", domainSources),
+            StrictDepsModuleWeightSnapshot("helper", helperSources),
+            StrictDepsModuleWeightSnapshot("server", serverSources)
+          ),
+          zincTransitiveModules = Seq(
+            StrictDepsModuleSnapshot("api", apiCompile.analysisFile, Seq("domain")),
+            StrictDepsModuleSnapshot("domain", domainCompile.analysisFile),
+            StrictDepsModuleSnapshot("helper", helperCompile.analysisFile),
+            StrictDepsModuleSnapshot("server", serverCompile.analysisFile)
+          ),
+          ignoredModuleNames = Set.empty
+        )
+        val weightsByModule = report.dependencyWeights.map(weight => weight.moduleName -> weight).toMap
+        val deltaSourceCounts = weightsByModule.view.mapValues(_.deltaSources.millSourceCount).toMap
+
+        assert(report.dependencySources.millSourceCount == 5)
+        assert(deltaSourceCounts == Map("api" -> 2, "helper" -> 2, "server" -> 1, "domain" -> 0))
+        assert(deltaSourceCounts.values.sum == report.dependencySources.millSourceCount)
       }
     }
 

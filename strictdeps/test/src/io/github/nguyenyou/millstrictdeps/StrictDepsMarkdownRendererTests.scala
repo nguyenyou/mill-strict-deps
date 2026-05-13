@@ -164,6 +164,10 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
               absoluteSources = StrictDepsSourceWeightComparison(
                 millSourceCount = weight.absoluteSourceCount,
                 zincSourceCount = weight.absoluteSourceCount
+              ),
+              deltaSources = StrictDepsSourceWeightComparison(
+                millSourceCount = weight.deltaSourceCount,
+                zincSourceCount = weight.deltaSourceCount
               )
             )
           }
@@ -177,10 +181,15 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(markdown.contains("current module sources      3"))
       assert(markdown.contains("dependency sources          4"))
       assert(markdown.contains("total source weight"))
-      assert(markdown.contains("own weight  absolute weight"))
+      assert(markdown.contains("own weight  absolute weight  delta weight"))
       assert(markdown.contains("api"))
       assert(markdown.contains("domain"))
-      assert(!markdown.contains("delta"))
+      val apiRow = markdown.linesIterator.find(_.startsWith("api")).getOrElse("")
+      val domainRow = markdown.linesIterator.find(_.startsWith("domain")).getOrElse("")
+      assert(apiRow.contains("direct"))
+      assert(apiRow.endsWith("4"))
+      assert(domainRow.contains("transitive"))
+      assert(domainRow.endsWith("0"))
     }
 
     test("renders Mill and Zinc source weight differences") {
@@ -195,7 +204,8 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
               moduleName = "api",
               declaredDirect = true,
               ownSources = StrictDepsSourceWeightComparison(2, 1),
-              absoluteSources = StrictDepsSourceWeightComparison(4, 3)
+              absoluteSources = StrictDepsSourceWeightComparison(4, 3),
+              deltaSources = StrictDepsSourceWeightComparison(4, 2)
             )
           )
         )
@@ -205,8 +215,9 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(markdown.contains("7 Mill / 6 Zinc"))
       assert(markdown.contains("2 Mill / 1 Zinc"))
       assert(markdown.contains("4 Mill / 3 Zinc"))
+      assert(markdown.contains("4 Mill / 2 Zinc"))
       assert(markdown.contains("Mill-Zinc +1"))
-      assert(markdown.contains("own Mill-Zinc +1; absolute Mill-Zinc +1"))
+      assert(markdown.contains("own Mill-Zinc +1; absolute Mill-Zinc +1; delta Mill-Zinc +2"))
       assert(markdown.contains("Differences usually mean generated or wrapped sources"))
     }
 

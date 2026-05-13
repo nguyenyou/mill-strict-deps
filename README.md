@@ -157,12 +157,15 @@ total source weight    = distinct current module sources + dependency sources
 own weight             = dependency module source files only
 absolute weight        = dependency module source files
                          + source files from modules reachable from it
+delta weight           = source files from this row's absolute weight
+                         that were not already counted by earlier rows
 ```
 
 The command calculates every count both ways. If Mill and Zinc agree, it prints
 one number. If they differ, it prints both numbers as `Mill / Zinc` and adds a
-note. Row weights can overlap because two dependency modules can share the same
-transitive dependency.
+note. Absolute weights can overlap because two dependency modules can share the
+same transitive dependency. Delta weights are ranked-row contributions, so their
+sum is the distinct dependency source count instead of double-counting overlap.
 
 For a compile-order view, `strictDepsCompileDepth` prints the same module
 source weights grouped from upstream to downstream:

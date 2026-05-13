@@ -35,14 +35,18 @@ object StrictDepsAnalyzer {
     val dependencyWeights = (millDependencyWeights.keySet ++ zincDependencyWeights.keySet).toSeq
       .sorted
       .map { moduleName =>
-        val millSourceCount = millDependencyWeights.get(moduleName).map(_.absoluteSourceCount).getOrElse(0)
-        val zincSourceCount = zincDependencyWeights.get(moduleName).map(_.absoluteSourceCount).getOrElse(0)
+        val millWeight = millDependencyWeights.get(moduleName)
+        val zincWeight = zincDependencyWeights.get(moduleName)
         StrictDepsModuleWeightComparison(
           moduleName = moduleName,
           declaredDirect = directModuleNames.contains(moduleName),
+          ownSources = StrictDepsSourceWeightComparison(
+            millSourceCount = millWeight.map(_.ownSourceCount).getOrElse(0),
+            zincSourceCount = zincWeight.map(_.ownSourceCount).getOrElse(0)
+          ),
           absoluteSources = StrictDepsSourceWeightComparison(
-            millSourceCount = millSourceCount,
-            zincSourceCount = zincSourceCount
+            millSourceCount = millWeight.map(_.absoluteSourceCount).getOrElse(0),
+            zincSourceCount = zincWeight.map(_.absoluteSourceCount).getOrElse(0)
           )
         )
       }

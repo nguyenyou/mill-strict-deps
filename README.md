@@ -140,6 +140,26 @@ compile graph if that edge were removed. For transitive missing deps, delta
 weight is the number of new source files added by declaring that module directly,
 which is often `0` because the files were already present through another edge.
 
+For a quick dependency-size view without the full JSON report, `strictDepsWeight`
+prints total source weight, then direct and transitive module deps sorted by
+absolute source weight:
+
+```text
+Mill allSourceFiles = source files planned for compiler input
+Zinc allSources     = source files recorded in compile analysis
+
+current module sources = this module's source count
+dependency sources     = distinct source files from transitive module deps
+total source weight    = distinct current module sources + dependency sources
+absolute source weight = dependency module source files
+                         + source files from modules reachable from it
+```
+
+The command calculates every count both ways. If Mill and Zinc agree, it prints
+one number. If they differ, it prints both numbers as `Mill / Zinc` and adds a
+note. Row weights can overlap because two dependency modules can share the same
+transitive dependency.
+
 It also reports classpath reachability:
 
 ```text
@@ -198,6 +218,7 @@ object appA extends ScalaModule with StrictDepsModule {
 ./mill appA.strictDepsReport
 ./mill appA.strictDepsJsonReport
 ./mill appA.strictDepsFixPlan
+./mill appA.strictDepsWeight
 ./mill appA.strictDepsCheck
 ```
 

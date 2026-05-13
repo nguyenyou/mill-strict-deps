@@ -8,6 +8,74 @@ import sbt.internal.inc.FileAnalysisStore
 
 object StrictDepsAnalyzer {
 
+  def weightReport(
+      currentAnalysisFile: os.Path,
+      currentModuleSourceFiles: Set[String],
+      directModuleNames: Set[String],
+      millTransitiveModules: Seq[StrictDepsModuleWeightSnapshot],
+      zincTransitiveModules: Seq[StrictDepsModuleSnapshot],
+      ignoredModuleNames: Set[String]
+  ): StrictDepsWeightReport = {
+    val currentMillSources = currentModuleSourceFiles
+    val currentZincSources = sourceFiles(readAnalysis(currentAnalysisFile))
+    val millDependencyModules = millTransitiveModules.map(weightModule)
+    val zincDependencyModules = zincTransitiveModules.map(analyzeDependencyModule)
+    val millDependencySources = millDependencyModules.flatMap(_.sources).toSet
+    val zincDependencySources = zincDependencyModules.flatMap(_.sources).toSet
+    val millDependencyWeights = computeDependencyWeights(
+      directModuleNames = directModuleNames,
+      dependencyModules = millDependencyModules,
+      ignoredModuleNames = ignoredModuleNames
+    ).map(weight => weight.moduleName -> weight).toMap
+    val zincDependencyWeights = computeDependencyWeights(
+      directModuleNames = directModuleNames,
+      dependencyModules = zincDependencyModules,
+      ignoredModuleNames = ignoredModuleNames
+    ).map(weight => weight.moduleName -> weight).toMap
+    val dependencyWeights = (millDependencyWeights.keySet ++ zincDependencyWeights.keySet).toSeq
+      .sorted
+      .map { moduleName =>
+        val millSourceCount = millDependencyWeights.get(moduleName).map(_.absoluteSourceCount).getOrElse(0)
+        val zincSourceCount = zincDependencyWeights.get(moduleName).map(_.absoluteSourceCount).getOrElse(0)
+        StrictDepsModuleWeightComparison(
+          moduleName = moduleName,
+          declaredDirect = directModuleNames.contains(moduleName),
+          absoluteSources = StrictDepsSourceWeightComparison(
+            millSourceCount = millSourceCount,
+            zincSourceCount = zincSourceCount
+          )
+        )
+      }
+
+    StrictDepsWeightReport(
+      currentModuleSources = StrictDepsSourceWeightComparison(
+        millSourceCount = currentMillSources.size,
+        zincSourceCount = currentZincSources.size
+      ),
+      dependencySources = StrictDepsSourceWeightComparison(
+        millSourceCount = millDependencySources.size,
+        zincSourceCount = zincDependencySources.size
+      ),
+      totalSources = StrictDepsSourceWeightComparison(
+        millSourceCount = currentMillSources.union(millDependencySources).size,
+        zincSourceCount = currentZincSources.union(zincDependencySources).size
+      ),
+      dependencyWeights = dependencyWeights
+    )
+  }
+
+  def dependencyWeights(
+      directModuleNames: Set[String],
+      transitiveModules: Seq[StrictDepsModuleSnapshot],
+      ignoredModuleNames: Set[String]
+  ): Seq[StrictDepsModuleDependencyWeight] = {
+    computeDependencyWeights(
+      directModuleNames = directModuleNames,
+      dependencyModules = transitiveModules.map(analyzeDependencyModule),
+      ignoredModuleNames = ignoredModuleNames
+    )
+  }
+
   def analyze(
       currentAnalysisFile: os.Path,
       directModuleNames: Set[String],
@@ -86,9 +154,9 @@ object StrictDepsAnalyzer {
       .distinct
       .sorted
 
-    val dependencyWeights = analyzeDependencyWeights(
+    val dependencyWeights = computeDependencyWeights(
       directModuleNames = directModuleNames,
-      analyzedModules = analyzedModules,
+      dependencyModules = analyzedModules.map(dependencyModule),
       ignoredModuleNames = ignoredModuleNames
     )
 
@@ -110,11 +178,28 @@ object StrictDepsAnalyzer {
     )
   }
 
+  private def analyzeDependencyModule(module: StrictDepsModuleSnapshot): DependencyModule = {
+    val analysis = readAnalysis(module.analysisFile)
+    DependencyModule(
+      moduleName = module.moduleName,
+      directDependencyModuleNames = module.directDependencyModuleNames.distinct.sorted,
+      sources = sourceFiles(analysis)
+    )
+  }
+
+  private def weightModule(module: StrictDepsModuleWeightSnapshot): DependencyModule = {
+    DependencyModule(
+      moduleName = module.moduleName,
+      directDependencyModuleNames = module.directDependencyModuleNames.distinct.sorted,
+      sources = module.sourceFiles.toSet
+    )
+  }
+
   private def analyzeModule(module: StrictDepsModuleSnapshot): AnalyzedModule = {
     val analysis = readAnalysis(module.analysisFile)
     val rawClasses = definedClasses(analysis)
     val defined = rawClasses.map(normalizeUsedClassName)
-    val allSources = analysis.relations.allSources.toSeq.map(_.id).distinct.sorted
+    val allSources = sourceFiles(analysis)
     val sourcesByClass = analysis.relations.allSources.toSeq
       .flatMap { source =>
         analysis.relations
@@ -134,19 +219,19 @@ object StrictDepsAnalyzer {
       definedClasses = defined,
       directDependencyModuleNames = module.directDependencyModuleNames.distinct.sorted,
       sourcesByClass = sourcesByClass,
-      sources = allSources.toSet
+      sources = allSources
     )
   }
 
-  private def analyzeDependencyWeights(
+  private def computeDependencyWeights(
       directModuleNames: Set[String],
-      analyzedModules: Seq[AnalyzedModule],
+      dependencyModules: Seq[DependencyModule],
       ignoredModuleNames: Set[String]
   ): Seq[StrictDepsModuleDependencyWeight] = {
-    val dependencyGraph = analyzedModules
+    val dependencyGraph = dependencyModules
       .map(module => module.moduleName -> module.directDependencyModuleNames.toSet)
       .toMap
-    val sourcesByModule = analyzedModules
+    val sourcesByModule = dependencyModules
       .map(module => module.moduleName -> module.sources)
       .toMap
     val currentDependencySources = sourcesForDependencyRoots(
@@ -155,7 +240,7 @@ object StrictDepsAnalyzer {
       sourcesByModule = sourcesByModule
     )
 
-    analyzedModules
+    dependencyModules
       .filterNot(module => ignoredModuleNames.contains(module.moduleName))
       .map { module =>
         val moduleClosure = dependencyModuleClosure(module.moduleName, dependencyGraph)
@@ -384,6 +469,10 @@ object StrictDepsAnalyzer {
     analysis.relations.classes._2s.toSet
   }
 
+  private def sourceFiles(analysis: Analysis): Set[String] = {
+    analysis.relations.allSources.toSeq.map(_.id).distinct.sorted.toSet
+  }
+
   private def normalizeUsedClassName(className: String): String = {
     className.stripSuffix("$")
   }
@@ -405,4 +494,18 @@ object StrictDepsAnalyzer {
       sourcesByClass: Map[String, Set[String]],
       sources: Set[String]
   )
+
+  private final case class DependencyModule(
+      moduleName: String,
+      directDependencyModuleNames: Seq[String],
+      sources: Set[String]
+  )
+
+  private def dependencyModule(module: AnalyzedModule): DependencyModule = {
+    DependencyModule(
+      moduleName = module.moduleName,
+      directDependencyModuleNames = module.directDependencyModuleNames,
+      sources = module.sources
+    )
+  }
 }

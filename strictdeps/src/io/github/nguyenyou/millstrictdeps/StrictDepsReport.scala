@@ -6,6 +6,7 @@ final case class StrictDepsReport(
     missingDirectModuleDeps: Seq[StrictDepsModuleUsage],
     usedLibraryClasspathEntries: Seq[String],
     dependencyUsageWeights: Seq[StrictDepsModuleUsageWeight] = Seq.empty,
+    dependencyWeights: Seq[StrictDepsModuleDependencyWeight] = Seq.empty,
     reachability: StrictDepsReachabilityReport = StrictDepsReachabilityReport.empty
 ) {
   def hasProblems: Boolean = {
@@ -22,8 +23,24 @@ final case class StrictDepsModuleUsage(
 
 final case class StrictDepsModuleSnapshot(
     moduleName: String,
-    analysisFile: os.Path
+    analysisFile: os.Path,
+    directDependencyModuleNames: Seq[String] = Seq.empty
 )
+
+final case class StrictDepsModuleDependencyWeight(
+    moduleName: String,
+    declaredDirect: Boolean,
+    directDependencyModuleNames: Seq[String],
+    transitiveDependencyModuleNames: Seq[String],
+    ownSourceCount: Int,
+    absoluteSourceCount: Int,
+    deltaSourceCount: Int,
+    deltaKind: String
+) {
+  def directDependencyModuleCount: Int = directDependencyModuleNames.size
+  def transitiveDependencyModuleCount: Int = transitiveDependencyModuleNames.size
+  def absoluteModuleCount: Int = transitiveDependencyModuleCount + 1
+}
 
 final case class StrictDepsModuleUsageWeight(
     moduleName: String,

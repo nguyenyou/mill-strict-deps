@@ -86,6 +86,12 @@ object StrictDepsAnalyzer {
       .distinct
       .sorted
 
+    val dependencyWeights = analyzeDependencyWeights(
+      directModuleNames = directModuleNames,
+      analyzedModules = analyzedModules,
+      ignoredModuleNames = ignoredModuleNames
+    )
+
     val reachability = analyzeReachability(
       usedExternalClasses = usedExternalClasses.toSet,
       directModuleNames = directModuleNames,
@@ -99,6 +105,7 @@ object StrictDepsAnalyzer {
       missingDirectModuleDeps = missingDirectModuleDeps,
       usedLibraryClasspathEntries = usedLibraryClasspathEntries,
       dependencyUsageWeights = dependencyUsageWeights,
+      dependencyWeights = dependencyWeights,
       reachability = reachability
     )
   }
@@ -125,9 +132,76 @@ object StrictDepsAnalyzer {
       analysis = analysis,
       rawClasses = rawClasses,
       definedClasses = defined,
+      directDependencyModuleNames = module.directDependencyModuleNames.distinct.sorted,
       sourcesByClass = sourcesByClass,
       sources = allSources.toSet
     )
+  }
+
+  private def analyzeDependencyWeights(
+      directModuleNames: Set[String],
+      analyzedModules: Seq[AnalyzedModule],
+      ignoredModuleNames: Set[String]
+  ): Seq[StrictDepsModuleDependencyWeight] = {
+    val dependencyGraph = analyzedModules
+      .map(module => module.moduleName -> module.directDependencyModuleNames.toSet)
+      .toMap
+    val sourcesByModule = analyzedModules
+      .map(module => module.moduleName -> module.sources)
+      .toMap
+    val currentDependencySources = sourcesForDependencyRoots(
+      rootModuleNames = directModuleNames,
+      dependencyGraph = dependencyGraph,
+      sourcesByModule = sourcesByModule
+    )
+
+    analyzedModules
+      .filterNot(module => ignoredModuleNames.contains(module.moduleName))
+      .map { module =>
+        val moduleClosure = dependencyModuleClosure(module.moduleName, dependencyGraph)
+        val moduleSources = sourcesForModules(moduleClosure, sourcesByModule)
+        val transitiveDependencyModuleNames = moduleClosure
+          .filterNot(_ == module.moduleName)
+          .toSeq
+          .sorted
+        val declaredDirect = directModuleNames.contains(module.moduleName)
+        val deltaSourceCount =
+          if (declaredDirect) {
+            val dependencySourcesWithoutModule = sourcesForDependencyRoots(
+              rootModuleNames = directModuleNames.filterNot(_ == module.moduleName),
+              dependencyGraph = dependencyGraph,
+              sourcesByModule = sourcesByModule
+            )
+            currentDependencySources.diff(dependencySourcesWithoutModule).size
+          } else {
+            moduleSources.diff(currentDependencySources).size
+          }
+        val deltaKind =
+          if (declaredDirect) {
+            "remove"
+          } else {
+            "add"
+          }
+
+        StrictDepsModuleDependencyWeight(
+          moduleName = module.moduleName,
+          declaredDirect = declaredDirect,
+          directDependencyModuleNames = module.directDependencyModuleNames,
+          transitiveDependencyModuleNames = transitiveDependencyModuleNames,
+          ownSourceCount = module.sources.size,
+          absoluteSourceCount = moduleSources.size,
+          deltaSourceCount = deltaSourceCount,
+          deltaKind = deltaKind
+        )
+      }
+      .sortBy { weight =>
+        (
+          -weight.deltaSourceCount,
+          -weight.absoluteSourceCount,
+          if (weight.declaredDirect) 0 else 1,
+          weight.moduleName
+        )
+      }
   }
 
   private def analyzeReachability(
@@ -239,6 +313,53 @@ object StrictDepsAnalyzer {
     seen.toSet
   }
 
+  private def dependencyModuleClosure(
+      moduleName: String,
+      dependencyGraph: Map[String, Set[String]]
+  ): Set[String] = {
+    val seen = mutable.Set.empty[String]
+    val queue = mutable.Queue.empty[String]
+    queue.enqueue(moduleName)
+
+    while (queue.nonEmpty) {
+      val currentModuleName = queue.dequeue()
+      if (!seen.contains(currentModuleName)) {
+        seen += currentModuleName
+        val dependencyModuleNames = dependencyGraph
+          .getOrElse(currentModuleName, Set.empty)
+          .toSeq
+          .sorted
+        dependencyModuleNames.foreach { dependencyModuleName =>
+          if (!seen.contains(dependencyModuleName)) {
+            queue.enqueue(dependencyModuleName)
+          }
+        }
+      }
+    }
+
+    seen.toSet
+  }
+
+  private def sourcesForDependencyRoots(
+      rootModuleNames: Set[String],
+      dependencyGraph: Map[String, Set[String]],
+      sourcesByModule: Map[String, Set[String]]
+  ): Set[String] = {
+    sourcesForModules(
+      rootModuleNames.flatMap { moduleName =>
+        dependencyModuleClosure(moduleName, dependencyGraph)
+      },
+      sourcesByModule
+    )
+  }
+
+  private def sourcesForModules(
+      moduleNames: Set[String],
+      sourcesByModule: Map[String, Set[String]]
+  ): Set[String] = {
+    moduleNames.flatMap(moduleName => sourcesByModule.getOrElse(moduleName, Set.empty))
+  }
+
   private def sourcesForClasses(module: AnalyzedModule, classNames: Set[String]): Seq[String] = {
     classNames.toSeq
       .flatMap(className => module.sourcesByClass.getOrElse(className, Set.empty))
@@ -280,6 +401,7 @@ object StrictDepsAnalyzer {
       analysis: Analysis,
       rawClasses: Set[String],
       definedClasses: Set[String],
+      directDependencyModuleNames: Seq[String],
       sourcesByClass: Map[String, Set[String]],
       sources: Set[String]
   )

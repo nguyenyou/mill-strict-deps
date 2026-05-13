@@ -18,6 +18,7 @@ object StrictDepsMarkdownRenderer {
     builder.append(s"| used library classpath entries | ${report.usedLibraryClasspathEntries.size} |\n\n")
 
     renderReachability(builder, report.reachability, maxClassesPerModule)
+    renderDependencyWeights(builder, report.dependencyWeights, maxClassesPerModule)
     renderUsageWeights(builder, report.dependencyUsageWeights, maxClassesPerModule)
     renderUnused(builder, report.unusedDirectModuleDeps)
     renderUsageSection(
@@ -97,6 +98,42 @@ object StrictDepsMarkdownRenderer {
         builder.append(" | ")
         builder.append(sampleValues(module.unusedSources, maxItemsPerModule))
         builder.append(" |\n")
+      }
+      builder.append("\n")
+    }
+  }
+
+  private def renderDependencyWeights(
+      builder: StringBuilder,
+      weights: Seq[StrictDepsModuleDependencyWeight],
+      maxModulesPerRow: Int
+  ): Unit = {
+    builder.append("## Dependency Source Weight\n\n")
+    builder.append(
+      "Absolute sources count a module plus its transitive compile module deps. " +
+        "Delta sources count files saved by removing a direct edge, or newly added by declaring a transitive module directly.\n\n"
+    )
+
+    if (weights.isEmpty) {
+      builder.append("_No dependency module sources recorded by Zinc._\n\n")
+    } else {
+      builder.append(
+        "| module | relationship | own sources | absolute sources | delta sources | transitive modules | direct deps |\n"
+      )
+      builder.append("| --- | --- | ---: | ---: | ---: | ---: | --- |\n")
+      weights.foreach { weight =>
+        val relationship =
+          if (weight.declaredDirect) {
+            "direct"
+          } else {
+            "transitive"
+          }
+        val directDeps = sampleValues(weight.directDependencyModuleNames, maxModulesPerRow)
+        builder.append(
+          s"| `${escape(weight.moduleName)}` | $relationship | ${weight.ownSourceCount} | " +
+            s"${weight.absoluteSourceCount} | ${weight.deltaSourceCount} (${weight.deltaKind}) | " +
+            s"${weight.transitiveDependencyModuleCount} | $directDeps |\n"
+        )
       }
       builder.append("\n")
     }

@@ -10,10 +10,10 @@ import mill.util.VcsVersion
 object Versions {
   val mill = "1.1.6-7-15943a"
   val scala = "3.8.3"
-  val zinc = "2.0.0-M16"
+  val zinc = "2.0.0-M17"
   val utest = "0.9.1"
   val upickle = "4.4.3"
-  val plugin = "0.1.0"
+  val plugin = "1.0.0"
 }
 
 object Constants {

@@ -128,6 +128,18 @@ used classes from dependency / all classes defined by that dependency
 That helps separate "this module leans heavily on core" from "this module only
 touches one class through a large dependency".
 
+It also reports dependency source weight:
+
+```text
+absolute weight = source files in the module plus its transitive module deps
+delta weight    = source files unique to this edge, after sibling deps are counted
+```
+
+For direct deps, delta weight is the number of source files that would leave the
+compile graph if that edge were removed. For transitive missing deps, delta
+weight is the number of new source files added by declaring that module directly,
+which is often `0` because the files were already present through another edge.
+
 It also reports classpath reachability:
 
 ```text
@@ -224,6 +236,7 @@ The report asks four questions:
 | `unused direct module deps` | direct internal modules with no used classes recorded by Zinc | Suspicious. The module declared the box, but the compiler did not see source code use classes from it. This is often removable, unless the edge is needed for resources, reflection, generated code, framework conventions, or another non-classpath reason. |
 | `missing direct module deps` | transitive internal modules whose classes were used directly | Bad graph shape. The source code used pieces from a box that was only available through another box. Add this module as a direct dep. |
 | `dependency usage weight` | used classes per internal dependency, with percentages | Advisory coupling signal. It shows how much of the current module's internal dependency usage comes from each dependency, and how much of that dependency's class surface was touched. |
+| `dependency source weight` | source files carried by each internal dependency edge | Compile-cost signal. Absolute weight is the whole dependency box. Delta weight is what this edge uniquely adds or saves after shared transitive deps are counted. |
 | `used library classpath entries` | external jars/classpath entries with usage recorded by Zinc | Informational today. External Maven deps are already compiled, so the current plugin does not fail on these. |
 
 The detailed sections then explain the summary.

@@ -125,6 +125,27 @@ object StrictDepsModuleTests extends TestSuite {
             weight("usedClasses").arr.exists(_.str == "com.example.domain.User")
           }
         )
+        val dependencyWeights = json("dependencyWeights").arr
+        val apiWeight = dependencyWeights.find { weight =>
+          weight("moduleName").str == "api"
+        }.getOrElse(throw new Exception("api dependency weight not found"))
+        val domainWeight = dependencyWeights.find { weight =>
+          weight("moduleName").str == "domain"
+        }.getOrElse(throw new Exception("domain dependency weight not found"))
+
+        assert(json("summary")("dependencyWeightModules").num == 4)
+        assert(apiWeight("declaredDirect").bool)
+        assert(apiWeight("directDependencyModuleNames").arr.exists(_.str == "domain"))
+        assert(apiWeight("transitiveDependencyModuleNames").arr.exists(_.str == "domain"))
+        assert(apiWeight("ownSourceCount").num == 1)
+        assert(apiWeight("absoluteSourceCount").num == 2)
+        assert(apiWeight("deltaSourceCount").num == 2)
+        assert(apiWeight("deltaKind").str == "remove")
+        assert(!domainWeight("declaredDirect").bool)
+        assert(domainWeight("ownSourceCount").num == 1)
+        assert(domainWeight("absoluteSourceCount").num == 1)
+        assert(domainWeight("deltaSourceCount").num == 0)
+        assert(domainWeight("deltaKind").str == "add")
 
         val fixPlanResult = eval(StrictDepsFixtureBuild.app.strictDepsFixPlan).fold(
           failure => throw new Exception(failure.toString),
@@ -133,7 +154,9 @@ object StrictDepsModuleTests extends TestSuite {
         val fixPlan = os.read(fixPlanResult.value.path)
 
         assert(fixPlan.contains("Add `domain`"))
+        assert(fixPlan.contains("absolute weight: 1 source, delta weight: 0 sources add"))
         assert(fixPlan.contains("Remove `server`"))
+        assert(fixPlan.contains("absolute weight: 1 source, delta weight: 1 source remove"))
         assert(fixPlan.contains("does not mutate `build.mill`"))
       }
     }
@@ -162,6 +185,23 @@ object StrictDepsModuleTests extends TestSuite {
             weight("usedClassCount").num > 0
           }
         )
+        val dependencyWeights = json("dependencyWeights").arr
+        val appBWeight = dependencyWeights.find { weight =>
+          weight("moduleName").str == "appB"
+        }.getOrElse(throw new Exception("appB dependency weight not found"))
+        val uiWidgetWeight = dependencyWeights.find { weight =>
+          weight("moduleName").str == "uiWidget"
+        }.getOrElse(throw new Exception("uiWidget dependency weight not found"))
+
+        assert(appBWeight("declaredDirect").bool)
+        assert(appBWeight("absoluteSourceCount").num == 2)
+        assert(appBWeight("deltaSourceCount").num == 2)
+        assert(appBWeight("deltaKind").str == "remove")
+        assert(appBWeight("transitiveDependencyModuleNames").arr.exists(_.str == "uiWidget"))
+        assert(!uiWidgetWeight("declaredDirect").bool)
+        assert(uiWidgetWeight("absoluteSourceCount").num == 1)
+        assert(uiWidgetWeight("deltaSourceCount").num == 0)
+        assert(uiWidgetWeight("deltaKind").str == "add")
 
         eval(StrictDepsFixtureBuild.appA.strictDepsCheck()) match {
           case Left(failure: ExecResult.Failure[?]) =>
@@ -197,6 +237,11 @@ object StrictDepsModuleTests extends TestSuite {
         assert(reachability("providedSourceCount").num == 3)
         assert(reachability("reachableSourceCount").num == 2)
         assert(reachability("unusedSourceCount").num == 1)
+        assert(json("dependencyWeights")(0)("moduleName").str == "fat")
+        assert(json("dependencyWeights")(0)("ownSourceCount").num == 3)
+        assert(json("dependencyWeights")(0)("absoluteSourceCount").num == 3)
+        assert(json("dependencyWeights")(0)("deltaSourceCount").num == 3)
+        assert(json("dependencyWeights")(0)("deltaKind").str == "remove")
         assert(fatModule("directUsedClasses").arr.exists(_.str == "com.example.fat.FatEntry"))
         assert(fatModule("reachableClasses").arr.exists(_.str == "com.example.fat.Needed"))
         assert(fatModule("unusedClasses").arr.exists(_.str == "com.example.fat.Unused"))

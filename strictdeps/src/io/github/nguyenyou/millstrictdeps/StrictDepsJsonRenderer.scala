@@ -10,7 +10,7 @@ object StrictDepsJsonRenderer {
 
   private def toJson(moduleName: String, report: StrictDepsReport): Value = {
     Obj(
-      "schemaVersion" -> Num(2),
+      "schemaVersion" -> Num(3),
       "moduleName" -> Str(moduleName),
       "hasProblems" -> Bool(report.hasProblems),
       "summary" -> Obj(
@@ -25,12 +25,14 @@ object StrictDepsJsonRenderer {
         "providedDependencySources" -> Num(report.reachability.providedSourceCount),
         "directlyUsedDependencySources" -> Num(report.reachability.directUsedSourceCount),
         "reachableDependencySources" -> Num(report.reachability.reachableSourceCount),
-        "unusedDependencySources" -> Num(report.reachability.unusedSourceCount)
+        "unusedDependencySources" -> Num(report.reachability.unusedSourceCount),
+        "dependencyWeightModules" -> Num(report.dependencyWeights.size)
       ),
       "usedDirectModuleDeps" -> Arr.from(report.usedDirectModuleDeps.map(usageJson)),
       "unusedDirectModuleDeps" -> stringArray(report.unusedDirectModuleDeps),
       "missingDirectModuleDeps" -> Arr.from(report.missingDirectModuleDeps.map(usageJson)),
       "dependencyUsageWeights" -> Arr.from(report.dependencyUsageWeights.map(weightJson)),
+      "dependencyWeights" -> Arr.from(report.dependencyWeights.map(dependencyWeightJson)),
       "reachability" -> reachabilityJson(report.reachability),
       "usedLibraryClasspathEntries" -> stringArray(report.usedLibraryClasspathEntries)
     )
@@ -53,6 +55,22 @@ object StrictDepsJsonRenderer {
       "currentModuleUsagePercent" -> Num(weight.currentModuleUsagePercent),
       "dependencyTouchedPercent" -> Num(weight.dependencyTouchedPercent),
       "usedClasses" -> stringArray(weight.usedClasses)
+    )
+  }
+
+  private def dependencyWeightJson(weight: StrictDepsModuleDependencyWeight): Value = {
+    Obj(
+      "moduleName" -> Str(weight.moduleName),
+      "declaredDirect" -> Bool(weight.declaredDirect),
+      "directDependencyModuleCount" -> Num(weight.directDependencyModuleCount),
+      "transitiveDependencyModuleCount" -> Num(weight.transitiveDependencyModuleCount),
+      "absoluteModuleCount" -> Num(weight.absoluteModuleCount),
+      "ownSourceCount" -> Num(weight.ownSourceCount),
+      "absoluteSourceCount" -> Num(weight.absoluteSourceCount),
+      "deltaSourceCount" -> Num(weight.deltaSourceCount),
+      "deltaKind" -> Str(weight.deltaKind),
+      "directDependencyModuleNames" -> stringArray(weight.directDependencyModuleNames),
+      "transitiveDependencyModuleNames" -> stringArray(weight.transitiveDependencyModuleNames)
     )
   }
 

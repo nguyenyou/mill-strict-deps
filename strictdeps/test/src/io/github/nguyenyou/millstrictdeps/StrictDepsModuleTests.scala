@@ -260,5 +260,17 @@ object StrictDepsModuleTests extends TestSuite {
         assert(markdown.contains("Unused.scala"))
       }
     }
+
+    test("runs strictDepsWeight command") {
+      val resourceFolder = os.Path(sys.env("MILL_TEST_RESOURCE_DIR"))
+      UnitTester(StrictDepsFixtureBuild, resourceFolder / "strict-deps-project").scoped { eval =>
+        eval(StrictDepsFixtureBuild.app.strictDepsWeight()) match {
+          case Left(failure) =>
+            throw new Exception(s"Unexpected strictDepsWeight failure: $failure")
+          case Right(_) =>
+            ()
+        }
+      }
+    }
   }
 }

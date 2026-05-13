@@ -27,6 +27,12 @@ final case class StrictDepsModuleSnapshot(
     directDependencyModuleNames: Seq[String] = Seq.empty
 )
 
+final case class StrictDepsModuleWeightSnapshot(
+    moduleName: String,
+    sourceFiles: Seq[String],
+    directDependencyModuleNames: Seq[String] = Seq.empty
+)
+
 final case class StrictDepsModuleDependencyWeight(
     moduleName: String,
     declaredDirect: Boolean,
@@ -41,6 +47,27 @@ final case class StrictDepsModuleDependencyWeight(
   def transitiveDependencyModuleCount: Int = transitiveDependencyModuleNames.size
   def absoluteModuleCount: Int = transitiveDependencyModuleCount + 1
 }
+
+final case class StrictDepsWeightReport(
+    currentModuleSources: StrictDepsSourceWeightComparison,
+    dependencySources: StrictDepsSourceWeightComparison,
+    totalSources: StrictDepsSourceWeightComparison,
+    dependencyWeights: Seq[StrictDepsModuleWeightComparison]
+)
+
+final case class StrictDepsSourceWeightComparison(
+    millSourceCount: Int,
+    zincSourceCount: Int
+) {
+  def matches: Boolean = millSourceCount == zincSourceCount
+  def maxSourceCount: Int = millSourceCount.max(zincSourceCount)
+}
+
+final case class StrictDepsModuleWeightComparison(
+    moduleName: String,
+    declaredDirect: Boolean,
+    absoluteSources: StrictDepsSourceWeightComparison
+)
 
 final case class StrictDepsModuleUsageWeight(
     moduleName: String,

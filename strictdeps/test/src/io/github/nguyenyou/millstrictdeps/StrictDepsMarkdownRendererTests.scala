@@ -146,6 +146,64 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(json("reachability")("modules")(0)("unusedSources")(0).str == "/src/UnusedApi.scala")
     }
 
+    test("renders absolute dependency source weight list") {
+      val markdown = StrictDepsWeightRenderer.render(
+        moduleName = "app",
+        report = StrictDepsWeightReport(
+          currentModuleSources = StrictDepsSourceWeightComparison(3, 3),
+          dependencySources = StrictDepsSourceWeightComparison(4, 4),
+          totalSources = StrictDepsSourceWeightComparison(7, 7),
+          dependencyWeights = report.dependencyWeights.map { weight =>
+            StrictDepsModuleWeightComparison(
+              moduleName = weight.moduleName,
+              declaredDirect = weight.declaredDirect,
+              absoluteSources = StrictDepsSourceWeightComparison(
+                millSourceCount = weight.absoluteSourceCount,
+                zincSourceCount = weight.absoluteSourceCount
+              )
+            )
+          }
+        )
+      )
+
+      assert(markdown.contains("Dependency Source Weights: app"))
+      assert(markdown.contains("How calculated"))
+      assert(markdown.contains("Mill allSourceFiles gives the source files planned for compiler input"))
+      assert(markdown.contains("rows can overlap"))
+      assert(markdown.contains("Mill and Zinc source counts match."))
+      assert(markdown.contains("current module sources             3"))
+      assert(markdown.contains("dependency sources                 4"))
+      assert(markdown.contains("total source weight                7"))
+      assert(markdown.contains("module  relationship  absolute source weight"))
+      assert(markdown.contains("api     direct                             4"))
+      assert(markdown.contains("domain  transitive                         2"))
+      assert(!markdown.contains("delta"))
+    }
+
+    test("renders Mill and Zinc source weight differences") {
+      val markdown = StrictDepsWeightRenderer.render(
+        moduleName = "app",
+        report = StrictDepsWeightReport(
+          currentModuleSources = StrictDepsSourceWeightComparison(3, 2),
+          dependencySources = StrictDepsSourceWeightComparison(4, 4),
+          totalSources = StrictDepsSourceWeightComparison(7, 6),
+          dependencyWeights = Seq(
+            StrictDepsModuleWeightComparison(
+              moduleName = "api",
+              declaredDirect = true,
+              absoluteSources = StrictDepsSourceWeightComparison(4, 3)
+            )
+          )
+        )
+      )
+
+      assert(markdown.contains("3 Mill / 2 Zinc"))
+      assert(markdown.contains("7 Mill / 6 Zinc"))
+      assert(markdown.contains("4 Mill / 3 Zinc"))
+      assert(markdown.contains("Mill-Zinc +1"))
+      assert(markdown.contains("Differences usually mean generated or wrapped sources"))
+    }
+
     test("renders fix plan separately from report facts") {
       val fixPlan = StrictDepsFixPlanRenderer.render(
         moduleName = "app",

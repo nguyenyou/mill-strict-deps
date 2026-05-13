@@ -71,6 +71,17 @@ trait StrictDepsModule extends ScalaModule { outer =>
     PathRef(out)
   }
 
+  def strictDepsWeight(): Command[Unit] = Task.Command {
+    val report = analyzeStrictDepsWeight()()
+    Task.log.info(
+      "\n" + StrictDepsWeightRenderer.render(
+        moduleName = moduleSegments.render,
+        report = report
+      )
+    )
+    Result.Success(())
+  }
+
   def strictDepsCheck(): Command[Unit] = Task.Command {
     val report = analyzeStrictDeps()()
     val failures = Seq(
@@ -97,8 +108,30 @@ trait StrictDepsModule extends ScalaModule { outer =>
 
   private def analyzeStrictDeps(): Task[StrictDepsReport] = Task.Anon {
     val directModules = directCompileModules
-    val transitiveSnapshots = Task.traverse(outer.transitiveModuleCompileModuleDeps.distinct) {
-      module =>
+    val transitiveSnapshots = strictDepsModuleSnapshots()()
+
+    StrictDepsAnalyzer.analyze(
+      currentAnalysisFile = compile().analysisFile,
+      directModuleNames = directModules.map(_.toString).toSet,
+      transitiveModules = transitiveSnapshots,
+      ignoredModuleNames = strictDepsIgnoredModuleDeps().toSet
+    )
+  }
+
+  private def analyzeStrictDepsWeight(): Task[StrictDepsWeightReport] =
+    Task.Anon {
+      StrictDepsAnalyzer.weightReport(
+        currentAnalysisFile = compile().analysisFile,
+        currentModuleSourceFiles = sourceFileIds(allSourceFiles()).toSet,
+        directModuleNames = directCompileModules.map(_.toString).toSet,
+        millTransitiveModules = strictDepsModuleWeightSnapshots()(),
+        zincTransitiveModules = strictDepsModuleSnapshots()(),
+        ignoredModuleNames = strictDepsIgnoredModuleDeps().toSet
+      )
+    }
+
+  private def strictDepsModuleSnapshots(): Task[Seq[StrictDepsModuleSnapshot]] = Task.Anon {
+    Task.traverse(outer.transitiveModuleCompileModuleDeps.distinct) { module =>
       Task.Anon {
         StrictDepsModuleSnapshot(
           moduleName = module.toString,
@@ -110,13 +143,21 @@ trait StrictDepsModule extends ScalaModule { outer =>
         )
       }
     }()
+  }
 
-    StrictDepsAnalyzer.analyze(
-      currentAnalysisFile = compile().analysisFile,
-      directModuleNames = directModules.map(_.toString).toSet,
-      transitiveModules = transitiveSnapshots,
-      ignoredModuleNames = strictDepsIgnoredModuleDeps().toSet
-    )
+  private def strictDepsModuleWeightSnapshots(): Task[Seq[StrictDepsModuleWeightSnapshot]] = Task.Anon {
+    Task.traverse(outer.transitiveModuleCompileModuleDeps.distinct) { module =>
+      Task.Anon {
+        StrictDepsModuleWeightSnapshot(
+          moduleName = module.toString,
+          sourceFiles = sourceFileIds(module.allSourceFiles()),
+          directDependencyModuleNames = directCompileModules(module)
+            .map(_.toString)
+            .distinct
+            .sorted
+        )
+      }
+    }()
   }
 
   private def directCompileModules: Seq[JavaModule] = {
@@ -125,5 +166,9 @@ trait StrictDepsModule extends ScalaModule { outer =>
 
   private def directCompileModules(module: JavaModule): Seq[JavaModule] = {
     (module.moduleDepsChecked ++ module.compileModuleDepsChecked).distinct
+  }
+
+  private def sourceFileIds(files: Seq[PathRef]): Seq[String] = {
+    files.map(_.path.toString).distinct.sorted
   }
 }

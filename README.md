@@ -151,6 +151,7 @@ Zinc allSources     = source files recorded in compile analysis
 current module sources = this module's source count
 dependency sources     = distinct source files from transitive module deps
 total source weight    = distinct current module sources + dependency sources
+own source weight      = dependency module source files only
 absolute source weight = dependency module source files
                          + source files from modules reachable from it
 ```

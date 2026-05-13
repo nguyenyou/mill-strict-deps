@@ -66,6 +66,7 @@ final case class StrictDepsSourceWeightComparison(
 final case class StrictDepsModuleWeightComparison(
     moduleName: String,
     declaredDirect: Boolean,
+    ownSources: StrictDepsSourceWeightComparison,
     absoluteSources: StrictDepsSourceWeightComparison
 )
 

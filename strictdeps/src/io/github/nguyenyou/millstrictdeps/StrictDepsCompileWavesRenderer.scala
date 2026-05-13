@@ -4,10 +4,10 @@ object StrictDepsCompileWavesRenderer {
   private val MetricHeader = "metric"
   private val ModuleHeader = "module"
   private val RelationshipHeader = "relationship"
-  private val OwnWeightHeader = "own source weight"
-  private val AbsoluteWeightHeader = "absolute source weight"
-  private val TotalWeightHeader = "total source weight"
-  private val SourceCountHeader = "source count"
+  private val OwnWeightHeader = "own weight"
+  private val AbsoluteWeightHeader = "absolute weight"
+  private val TotalWeightHeader = "total weight"
+  private val SourceCountHeader = "count"
   private val NoteHeader = "note"
 
   def render(
@@ -22,10 +22,13 @@ object StrictDepsCompileWavesRenderer {
       builder.append("No dependency module sources recorded by Mill allSourceFiles or Zinc analysis.\n\n")
     } else {
       val layout = waveLayout(report.compileWaves)
-      report.compileWaves.foreach { wave =>
+      report.compileWaves.zipWithIndex.foreach { case (wave, index) =>
         appendWave(builder, wave, layout)
-        builder.append("\n")
+        if (index < report.compileWaves.size - 1) {
+          appendSeparator(builder, layout.tableWidth)
+        }
       }
+      appendSeparator(builder, layout.tableWidth)
     }
 
     appendTarget(builder, moduleName, report)
@@ -53,19 +56,6 @@ object StrictDepsCompileWavesRenderer {
     if (layout.showNotes) {
       builder.append("  ")
       builder.append(padRight(NoteHeader, layout.noteWidth))
-    }
-    builder.append("\n")
-
-    builder.append("-" * layout.moduleWidth)
-    builder.append("  ")
-    builder.append("-" * layout.relationshipWidth)
-    builder.append("  ")
-    builder.append("-" * layout.ownWeightWidth)
-    builder.append("  ")
-    builder.append("-" * layout.absoluteWeightWidth)
-    if (layout.showNotes) {
-      builder.append("  ")
-      builder.append("-" * layout.noteWidth)
     }
     builder.append("\n")
 
@@ -128,17 +118,6 @@ object StrictDepsCompileWavesRenderer {
     }
     builder.append("\n")
 
-    builder.append("-" * moduleWidth)
-    builder.append("  ")
-    builder.append("-" * ownWeightWidth)
-    builder.append("  ")
-    builder.append("-" * totalWeightWidth)
-    if (showNote) {
-      builder.append("  ")
-      builder.append("-" * noteWidth)
-    }
-    builder.append("\n")
-
     builder.append(padRight(display(moduleName), moduleWidth))
     builder.append("  ")
     builder.append(padLeft(ownValue, ownWeightWidth))
@@ -148,6 +127,11 @@ object StrictDepsCompileWavesRenderer {
       builder.append("  ")
       builder.append(padRight(note, noteWidth))
     }
+    builder.append("\n")
+  }
+
+  private def appendSeparator(builder: StringBuilder, width: Int): Unit = {
+    builder.append("-" * width)
     builder.append("\n")
   }
 
@@ -305,5 +289,13 @@ object StrictDepsCompileWavesRenderer {
       absoluteWeightWidth: Int,
       noteWidth: Int,
       showNotes: Boolean
-  )
+  ) {
+    def tableWidth: Int = {
+      moduleWidth +
+        2 + relationshipWidth +
+        2 + ownWeightWidth +
+        2 + absoluteWeightWidth +
+        (if (showNotes) 2 + noteWidth else 0)
+    }
+  }
 }

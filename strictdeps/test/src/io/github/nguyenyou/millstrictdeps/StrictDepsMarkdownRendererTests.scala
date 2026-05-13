@@ -218,7 +218,7 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
         absoluteSources = StrictDepsSourceWeightComparison(2, 2)
       )
       val apiWeight = StrictDepsModuleWeightComparison(
-        moduleName = "api",
+        moduleName = "modules.reallyLong.api",
         declaredDirect = true,
         ownSources = StrictDepsSourceWeightComparison(2, 2),
         absoluteSources = StrictDepsSourceWeightComparison(4, 4)
@@ -240,12 +240,19 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
 
       assert(markdown.contains("metric                  source count"))
       assert(markdown.contains("compile wave 0  1 module"))
-      assert(markdown.contains("domain  transitive"))
       assert(markdown.contains("compile wave 1  1 module"))
-      assert(markdown.contains("api     direct"))
       assert(markdown.contains("target wave 2"))
       assert(markdown.contains("own source weight  total source weight"))
       assert(markdown.contains("app"))
+
+      val lines = markdown.linesIterator.toSeq
+      val waveHeaders = lines.filter(line => line.contains("module") && line.contains("relationship"))
+      assert(waveHeaders.size == 2)
+      assert(waveHeaders.map(_.indexOf("relationship")).distinct.size == 1)
+
+      val domainRow = lines.find(_.startsWith("domain")).getOrElse("")
+      val apiRow = lines.find(_.startsWith("modules.reallyLong.api")).getOrElse("")
+      assert(domainRow.indexOf("transitive") == apiRow.indexOf("direct"))
     }
 
     test("renders fix plan separately from report facts") {

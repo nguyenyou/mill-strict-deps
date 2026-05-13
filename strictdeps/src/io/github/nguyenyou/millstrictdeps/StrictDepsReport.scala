@@ -70,7 +70,8 @@ final case class StrictDepsModuleWeightComparison(
     declaredDirect: Boolean,
     ownSources: StrictDepsSourceWeightComparison,
     absoluteSources: StrictDepsSourceWeightComparison,
-    deltaSources: StrictDepsSourceWeightComparison = StrictDepsSourceWeightComparison(0, 0)
+    deltaSources: StrictDepsSourceWeightComparison = StrictDepsSourceWeightComparison(0, 0),
+    compileDepthDeltaSources: StrictDepsSourceWeightComparison = StrictDepsSourceWeightComparison(0, 0)
 )
 
 final case class StrictDepsCompileDepth(

@@ -7,6 +7,7 @@ object StrictDepsCompileDepthRenderer {
   private val RelationshipHeader = "relationship"
   private val OwnWeightHeader = "own weight"
   private val AbsoluteWeightHeader = "absolute weight"
+  private val DeltaWeightHeader = "delta weight"
   private val SourceCountHeader = "count"
   private val NoteHeader = "note"
   private val TargetRelationship = "target"
@@ -41,6 +42,7 @@ object StrictDepsCompileDepthRenderer {
       relationshipValue = RelationshipHeader,
       ownValue = OwnWeightHeader,
       absoluteValue = AbsoluteWeightHeader,
+      deltaValue = DeltaWeightHeader,
       noteValue = Option.when(layout.showNotes)(NoteHeader).getOrElse("")
     )
   }
@@ -52,10 +54,11 @@ object StrictDepsCompileDepthRenderer {
   ): Unit = {
     val ownWeightValues = depth.modules.map(weight => formatComparison(weight.ownSources))
     val absoluteWeightValues = depth.modules.map(weight => formatComparison(weight.absoluteSources))
+    val deltaWeightValues = depth.modules.map(weight => formatComparison(weight.compileDepthDeltaSources))
     val notes = depth.modules.map(rowNote)
 
-    depth.modules.zip(ownWeightValues).zip(absoluteWeightValues).zip(notes).zipWithIndex.foreach {
-      case ((((weight, ownValue), absoluteValue), note), index) =>
+    depth.modules.zip(ownWeightValues).zip(absoluteWeightValues).zip(deltaWeightValues).zip(notes).zipWithIndex.foreach {
+      case (((((weight, ownValue), absoluteValue), deltaValue), note), index) =>
         appendTableRow(
           builder = builder,
           layout = layout,
@@ -64,6 +67,7 @@ object StrictDepsCompileDepthRenderer {
           relationshipValue = relationship(weight),
           ownValue = ownValue,
           absoluteValue = absoluteValue,
+          deltaValue = deltaValue,
           noteValue = note
         )
     }
@@ -77,6 +81,7 @@ object StrictDepsCompileDepthRenderer {
         relationshipValue = "",
         ownValue = "",
         absoluteValue = "",
+        deltaValue = "",
         noteValue = ""
       )
     }
@@ -103,9 +108,11 @@ object StrictDepsCompileDepthRenderer {
     val weights = depths.flatMap(_.modules)
     val targetOwnValue = formatComparison(report.currentModuleSources)
     val targetAbsoluteValue = formatComparison(report.totalSources)
+    val targetDeltaValue = formatComparison(report.currentModuleSources)
     val targetNoteValue = targetNote(report)
     val ownWeightValues = weights.map(weight => formatComparison(weight.ownSources))
     val absoluteWeightValues = weights.map(weight => formatComparison(weight.absoluteSources))
+    val deltaWeightValues = weights.map(weight => formatComparison(weight.compileDepthDeltaSources))
     val notes = weights.map(rowNote)
     val depthValues = depths.flatMap { depth =>
       Seq(s"depth ${depth.index}", moduleCountLabel(depth.modules.size))
@@ -117,6 +124,7 @@ object StrictDepsCompileDepthRenderer {
       relationshipWidth = maxWidth(RelationshipHeader +: (weights.map(relationship) :+ TargetRelationship)),
       ownWeightWidth = maxWidth(OwnWeightHeader +: (ownWeightValues :+ targetOwnValue)),
       absoluteWeightWidth = maxWidth(AbsoluteWeightHeader +: (absoluteWeightValues :+ targetAbsoluteValue)),
+      deltaWeightWidth = maxWidth(DeltaWeightHeader +: (deltaWeightValues :+ targetDeltaValue)),
       noteWidth = maxWidth(NoteHeader +: (notes :+ targetNoteValue)),
       showNotes = (notes :+ targetNoteValue).exists(_.nonEmpty)
     )
@@ -130,6 +138,7 @@ object StrictDepsCompileDepthRenderer {
   ): Unit = {
     val ownValue = formatComparison(report.currentModuleSources)
     val totalValue = formatComparison(report.totalSources)
+    val deltaValue = formatComparison(report.currentModuleSources)
     val note = targetNote(report)
 
     appendTableRow(
@@ -140,6 +149,7 @@ object StrictDepsCompileDepthRenderer {
       relationshipValue = TargetRelationship,
       ownValue = ownValue,
       absoluteValue = totalValue,
+      deltaValue = deltaValue,
       noteValue = note
     )
     appendTableRow(
@@ -150,6 +160,7 @@ object StrictDepsCompileDepthRenderer {
       relationshipValue = "",
       ownValue = "",
       absoluteValue = "",
+      deltaValue = "",
       noteValue = ""
     )
   }
@@ -162,6 +173,7 @@ object StrictDepsCompileDepthRenderer {
       relationshipValue: String,
       ownValue: String,
       absoluteValue: String,
+      deltaValue: String,
       noteValue: String
   ): Unit = {
     val row = new StringBuilder
@@ -174,6 +186,8 @@ object StrictDepsCompileDepthRenderer {
     row.append(padLeft(ownValue, layout.ownWeightWidth))
     row.append("  ")
     row.append(padLeft(absoluteValue, layout.absoluteWeightWidth))
+    row.append("  ")
+    row.append(padLeft(deltaValue, layout.deltaWeightWidth))
     if (layout.showNotes) {
       row.append("  ")
       row.append(padRight(noteValue, layout.noteWidth))
@@ -243,7 +257,7 @@ object StrictDepsCompileDepthRenderer {
       report.dependencySources,
       report.totalSources
     ) ++ report.dependencyWeights.flatMap { weight =>
-      Seq(weight.ownSources, weight.absoluteSources)
+      Seq(weight.ownSources, weight.absoluteSources, weight.compileDepthDeltaSources)
     }
 
     if (!comparisons.forall(_.matches)) {
@@ -289,7 +303,8 @@ object StrictDepsCompileDepthRenderer {
   private def rowNote(weight: StrictDepsModuleWeightComparison): String = {
     Seq(
       "own" -> weight.ownSources,
-      "absolute" -> weight.absoluteSources
+      "absolute" -> weight.absoluteSources,
+      "delta" -> weight.compileDepthDeltaSources
     ).flatMap { case (label, comparison) =>
       Option.when(!comparison.matches) {
         s"$label Mill-Zinc ${formatSigned(comparison.millSourceCount - comparison.zincSourceCount)}"
@@ -344,6 +359,7 @@ object StrictDepsCompileDepthRenderer {
       relationshipWidth: Int,
       ownWeightWidth: Int,
       absoluteWeightWidth: Int,
+      deltaWeightWidth: Int,
       noteWidth: Int,
       showNotes: Boolean
   ) {
@@ -353,6 +369,7 @@ object StrictDepsCompileDepthRenderer {
         2 + relationshipWidth +
         2 + ownWeightWidth +
         2 + absoluteWeightWidth +
+        2 + deltaWeightWidth +
         (if (showNotes) 2 + noteWidth else 0)
     }
   }

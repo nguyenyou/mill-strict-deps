@@ -174,6 +174,7 @@ source weights grouped from upstream to downstream:
 compile depth 0 = dependency modules with no upstream module deps in this graph
 compile depth N = modules whose longest upstream direct-dependency path has N edges
 target depth    = the examined module
+delta weight    = source files first introduced by that row in top-down order
 ```
 
 This view does not draw edges. It uses the direct module-dependency graph to

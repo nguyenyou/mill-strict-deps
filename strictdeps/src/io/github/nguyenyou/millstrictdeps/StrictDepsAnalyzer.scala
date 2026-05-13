@@ -59,7 +59,7 @@ object StrictDepsAnalyzer {
       sortedModuleNames = sortedDependencyWeightModuleNames,
       dependencyWeightSourcesByModule = zincDependencyWeightSources
     )
-    val dependencyWeights = dependencyWeightsWithoutDelta.map { weight =>
+    val dependencyWeightsWithListDelta = dependencyWeightsWithoutDelta.map { weight =>
       weight.copy(
         deltaSources = StrictDepsSourceWeightComparison(
           millSourceCount = millDeltaSourceCounts.getOrElse(weight.moduleName, 0),
@@ -67,10 +67,39 @@ object StrictDepsAnalyzer {
         )
       )
     }
-    val compileDepthData = compileDepthReport(
+    val compileDepthDataWithoutDepthDelta = compileDepthReport(
       directModuleNames = directModuleNames,
-      dependencyWeights = dependencyWeights,
+      dependencyWeights = dependencyWeightsWithListDelta,
       dependencyModules = millDependencyModules ++ zincDependencyModules
+    )
+    val compileDepthModuleNames = compileDepthDataWithoutDepthDelta.depths.flatMap { depth =>
+      depth.modules.map(_.moduleName)
+    }
+    val millCompileDepthDeltaSourceCounts = computeDeltaSourceCounts(
+      sortedModuleNames = compileDepthModuleNames,
+      dependencyWeightSourcesByModule = millDependencyWeightSources
+    )
+    val zincCompileDepthDeltaSourceCounts = computeDeltaSourceCounts(
+      sortedModuleNames = compileDepthModuleNames,
+      dependencyWeightSourcesByModule = zincDependencyWeightSources
+    )
+    val dependencyWeights = dependencyWeightsWithListDelta.map { weight =>
+      weight.copy(
+        compileDepthDeltaSources = StrictDepsSourceWeightComparison(
+          millSourceCount = millCompileDepthDeltaSourceCounts.getOrElse(weight.moduleName, 0),
+          zincSourceCount = zincCompileDepthDeltaSourceCounts.getOrElse(weight.moduleName, 0)
+        )
+      )
+    }
+    val dependencyWeightsByModule = dependencyWeights.map(weight => weight.moduleName -> weight).toMap
+    val compileDepthData = compileDepthDataWithoutDepthDelta.copy(
+      depths = compileDepthDataWithoutDepthDelta.depths.map { depth =>
+        depth.copy(
+          modules = depth.modules.map { weight =>
+            dependencyWeightsByModule.getOrElse(weight.moduleName, weight)
+          }
+        )
+      }
     )
 
     StrictDepsWeightReport(

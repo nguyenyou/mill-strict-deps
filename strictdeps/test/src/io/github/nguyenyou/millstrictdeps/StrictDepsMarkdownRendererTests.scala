@@ -226,13 +226,15 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
         moduleName = "domain",
         declaredDirect = false,
         ownSources = StrictDepsSourceWeightComparison(2, 2),
-        absoluteSources = StrictDepsSourceWeightComparison(2, 2)
+        absoluteSources = StrictDepsSourceWeightComparison(2, 2),
+        compileDepthDeltaSources = StrictDepsSourceWeightComparison(2, 2)
       )
       val apiWeight = StrictDepsModuleWeightComparison(
         moduleName = "modules.reallyLong.api",
         declaredDirect = true,
         ownSources = StrictDepsSourceWeightComparison(2, 2),
-        absoluteSources = StrictDepsSourceWeightComparison(4, 4)
+        absoluteSources = StrictDepsSourceWeightComparison(4, 4),
+        compileDepthDeltaSources = StrictDepsSourceWeightComparison(2, 2)
       )
       val markdown = StrictDepsCompileDepthRenderer.render(
         moduleName = "app",
@@ -250,7 +252,7 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       )
 
       assert(markdown.contains("metric                  count"))
-      assert(markdown.contains("own weight  absolute weight"))
+      assert(markdown.contains("own weight  absolute weight  delta weight"))
       assert(markdown.contains("depth 0"))
       assert(markdown.contains("1 module"))
       assert(markdown.contains("depth 1"))
@@ -275,11 +277,14 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       val domainRow = lines.find(_.contains("domain")).getOrElse("")
       val apiRow = lines.find(_.contains("modules.reallyLong.api")).getOrElse("")
       assert(domainRow.indexOf("transitive") == apiRow.indexOf("direct"))
+      assert(domainRow.endsWith("2"))
+      assert(apiRow.endsWith("2"))
 
       val targetRow = lines.find(_.startsWith("target")).getOrElse("")
       val targetDepthRow = lines.find(_.startsWith("depth 2")).getOrElse("")
       assert(targetRow.contains("app"))
       assert(targetRow.contains("target"))
+      assert(targetRow.endsWith("3"))
       assert(targetDepthRow.nonEmpty)
       assert(lines.forall(line => !line.endsWith(" ")))
     }

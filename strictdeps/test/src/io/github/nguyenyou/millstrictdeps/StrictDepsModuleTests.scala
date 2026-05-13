@@ -312,10 +312,14 @@ object StrictDepsModuleTests extends TestSuite {
         )
         val weightsByModule = report.dependencyWeights.map(weight => weight.moduleName -> weight).toMap
         val deltaSourceCounts = weightsByModule.view.mapValues(_.deltaSources.millSourceCount).toMap
+        val compileDepthDeltaSourceCounts =
+          weightsByModule.view.mapValues(_.compileDepthDeltaSources.millSourceCount).toMap
 
         assert(report.dependencySources.millSourceCount == 5)
         assert(deltaSourceCounts == Map("api" -> 2, "helper" -> 2, "server" -> 1, "domain" -> 0))
         assert(deltaSourceCounts.values.sum == report.dependencySources.millSourceCount)
+        assert(compileDepthDeltaSourceCounts == Map("api" -> 1, "helper" -> 2, "server" -> 1, "domain" -> 1))
+        assert(compileDepthDeltaSourceCounts.values.sum == report.dependencySources.millSourceCount)
       }
     }
 

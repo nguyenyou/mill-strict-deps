@@ -210,6 +210,44 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(markdown.contains("Differences usually mean generated or wrapped sources"))
     }
 
+    test("renders compile waves top down") {
+      val domainWeight = StrictDepsModuleWeightComparison(
+        moduleName = "domain",
+        declaredDirect = false,
+        ownSources = StrictDepsSourceWeightComparison(2, 2),
+        absoluteSources = StrictDepsSourceWeightComparison(2, 2)
+      )
+      val apiWeight = StrictDepsModuleWeightComparison(
+        moduleName = "api",
+        declaredDirect = true,
+        ownSources = StrictDepsSourceWeightComparison(2, 2),
+        absoluteSources = StrictDepsSourceWeightComparison(4, 4)
+      )
+      val markdown = StrictDepsCompileWavesRenderer.render(
+        moduleName = "app",
+        report = StrictDepsWeightReport(
+          currentModuleSources = StrictDepsSourceWeightComparison(3, 3),
+          dependencySources = StrictDepsSourceWeightComparison(4, 4),
+          totalSources = StrictDepsSourceWeightComparison(7, 7),
+          dependencyWeights = Seq(apiWeight, domainWeight),
+          compileWaves = Seq(
+            StrictDepsCompileWave(0, Seq(domainWeight)),
+            StrictDepsCompileWave(1, Seq(apiWeight))
+          ),
+          targetWaveIndex = 2
+        )
+      )
+
+      assert(markdown.contains("metric                  source count"))
+      assert(markdown.contains("compile wave 0  1 module"))
+      assert(markdown.contains("domain  transitive"))
+      assert(markdown.contains("compile wave 1  1 module"))
+      assert(markdown.contains("api     direct"))
+      assert(markdown.contains("target wave 2"))
+      assert(markdown.contains("own source weight  total source weight"))
+      assert(markdown.contains("app"))
+    }
+
     test("renders fix plan separately from report facts") {
       val fixPlan = StrictDepsFixPlanRenderer.render(
         moduleName = "app",

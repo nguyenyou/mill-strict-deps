@@ -272,5 +272,17 @@ object StrictDepsModuleTests extends TestSuite {
         }
       }
     }
+
+    test("runs strictDepsCompileWaves command") {
+      val resourceFolder = os.Path(sys.env("MILL_TEST_RESOURCE_DIR"))
+      UnitTester(StrictDepsFixtureBuild, resourceFolder / "strict-deps-project").scoped { eval =>
+        eval(StrictDepsFixtureBuild.app.strictDepsCompileWaves()) match {
+          case Left(failure) =>
+            throw new Exception(s"Unexpected strictDepsCompileWaves failure: $failure")
+          case Right(_) =>
+            ()
+        }
+      }
+    }
   }
 }

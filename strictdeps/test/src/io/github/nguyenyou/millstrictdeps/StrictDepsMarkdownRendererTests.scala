@@ -210,7 +210,7 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(markdown.contains("Differences usually mean generated or wrapped sources"))
     }
 
-    test("renders compile waves top down") {
+    test("renders compile depths top down") {
       val domainWeight = StrictDepsModuleWeightComparison(
         moduleName = "domain",
         declaredDirect = false,
@@ -223,55 +223,53 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
         ownSources = StrictDepsSourceWeightComparison(2, 2),
         absoluteSources = StrictDepsSourceWeightComparison(4, 4)
       )
-      val markdown = StrictDepsCompileWavesRenderer.render(
+      val markdown = StrictDepsCompileDepthRenderer.render(
         moduleName = "app",
         report = StrictDepsWeightReport(
           currentModuleSources = StrictDepsSourceWeightComparison(3, 3),
           dependencySources = StrictDepsSourceWeightComparison(4, 4),
           totalSources = StrictDepsSourceWeightComparison(7, 7),
           dependencyWeights = Seq(apiWeight, domainWeight),
-          compileWaves = Seq(
-            StrictDepsCompileWave(0, Seq(domainWeight)),
-            StrictDepsCompileWave(1, Seq(apiWeight))
+          compileDepths = Seq(
+            StrictDepsCompileDepth(0, Seq(domainWeight)),
+            StrictDepsCompileDepth(1, Seq(apiWeight))
           ),
-          targetWaveIndex = 2
+          targetDepthIndex = 2
         )
       )
 
       assert(markdown.contains("metric                  count"))
-      assert(!markdown.contains("compile wave 0"))
-      assert(!markdown.contains("target wave 2"))
       assert(markdown.contains("own weight  absolute weight"))
-      assert(markdown.contains("wave 0"))
+      assert(markdown.contains("depth 0"))
       assert(markdown.contains("1 module"))
-      assert(markdown.contains("wave 1"))
+      assert(markdown.contains("depth 1"))
       assert(markdown.contains("target"))
-      assert(markdown.contains("wave 2"))
+      assert(markdown.contains("depth 2"))
       assert(markdown.contains("app"))
 
       val lines = markdown.linesIterator.toSeq
-      val tableHeader = lines.find(line => line.startsWith("wave") && line.contains("module")).getOrElse("")
+      val tableHeader = lines.find(line => line.startsWith("depth") && line.contains("module")).getOrElse("")
       assert(tableHeader.contains("relationship"))
       val continuousSeparators = lines.filter(line => line.nonEmpty && line.forall(_ == '-'))
       assert(continuousSeparators.size == 2)
       assert(continuousSeparators.forall(_.length > 20))
 
-      val compileWaveLines = lines.dropWhile(!_.startsWith("wave 0"))
-      assert(!compileWaveLines.exists(_.contains("--  --")))
+      val compileDepthLines = lines.dropWhile(!_.startsWith("depth 0"))
+      assert(!compileDepthLines.exists(_.contains("--  --")))
 
-      val waveHeaders = lines.filter(line => line.contains("module") && line.contains("relationship"))
-      assert(waveHeaders.size == 1)
-      assert(waveHeaders.map(_.indexOf("relationship")).distinct.size == 1)
+      val depthHeaders = lines.filter(line => line.contains("module") && line.contains("relationship"))
+      assert(depthHeaders.size == 1)
+      assert(depthHeaders.map(_.indexOf("relationship")).distinct.size == 1)
 
       val domainRow = lines.find(_.contains("domain")).getOrElse("")
       val apiRow = lines.find(_.contains("modules.reallyLong.api")).getOrElse("")
       assert(domainRow.indexOf("transitive") == apiRow.indexOf("direct"))
 
       val targetRow = lines.find(_.startsWith("target")).getOrElse("")
-      val targetWaveRow = lines.find(_.startsWith("wave 2")).getOrElse("")
+      val targetDepthRow = lines.find(_.startsWith("depth 2")).getOrElse("")
       assert(targetRow.contains("app"))
       assert(targetRow.contains("target"))
-      assert(targetWaveRow.nonEmpty)
+      assert(targetDepthRow.nonEmpty)
       assert(lines.forall(line => !line.endsWith(" ")))
     }
 

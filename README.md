@@ -161,17 +161,17 @@ one number. If they differ, it prints both numbers as `Mill / Zinc` and adds a
 note. Row weights can overlap because two dependency modules can share the same
 transitive dependency.
 
-For a compile-order view, `strictDepsCompileWaves` prints the same module
+For a compile-order view, `strictDepsCompileDepth` prints the same module
 source weights grouped from upstream to downstream:
 
 ```text
-compile wave 0 = dependency modules with no upstream module deps in this graph
-compile wave N = modules that wait for earlier waves
-target wave    = the examined module
+compile depth 0 = dependency modules with no upstream module deps in this graph
+compile depth N = modules whose longest upstream direct-dependency path has N edges
+target depth    = the examined module
 ```
 
 This view does not draw edges. It uses the direct module-dependency graph to
-place nodes into waves, so the terminal output reads top down as compile order.
+place nodes by compile depth, so the terminal output reads top down as compile order.
 
 It also reports classpath reachability:
 
@@ -232,7 +232,7 @@ object appA extends ScalaModule with StrictDepsModule {
 ./mill appA.strictDepsJsonReport
 ./mill appA.strictDepsFixPlan
 ./mill appA.strictDepsWeight
-./mill appA.strictDepsCompileWaves
+./mill appA.strictDepsCompileDepth
 ./mill appA.strictDepsCheck
 ```
 

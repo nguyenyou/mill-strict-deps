@@ -50,7 +50,7 @@ object StrictDepsAnalyzer {
           )
         )
       }
-    val compileWaveData = compileWaveReport(
+    val compileDepthData = compileDepthReport(
       directModuleNames = directModuleNames,
       dependencyWeights = dependencyWeights,
       dependencyModules = millDependencyModules ++ zincDependencyModules
@@ -70,8 +70,8 @@ object StrictDepsAnalyzer {
         zincSourceCount = currentZincSources.union(zincDependencySources).size
       ),
       dependencyWeights = dependencyWeights,
-      compileWaves = compileWaveData.waves,
-      targetWaveIndex = compileWaveData.targetWaveIndex
+      compileDepths = compileDepthData.depths,
+      targetDepthIndex = compileDepthData.targetDepthIndex
     )
   }
 
@@ -300,11 +300,11 @@ object StrictDepsAnalyzer {
       }
   }
 
-  private def compileWaveReport(
+  private def compileDepthReport(
       directModuleNames: Set[String],
       dependencyWeights: Seq[StrictDepsModuleWeightComparison],
       dependencyModules: Seq[DependencyModule]
-  ): CompileWaveData = {
+  ): CompileDepthData = {
     val visibleModuleNames = dependencyWeights.map(_.moduleName).toSet
     val dependencyGraph = dependencyModules
       .groupMapReduce(_.moduleName)(_.directDependencyModuleNames.toSet)(_ ++ _)
@@ -312,19 +312,19 @@ object StrictDepsAnalyzer {
       .mapValues(_.intersect(visibleModuleNames))
       .toMap
     val weightsByModule = dependencyWeights.map(weight => weight.moduleName -> weight).toMap
-    val waveLevels = compileWaveLevels(
+    val depthLevels = compileDepthLevels(
       moduleNames = visibleModuleNames,
       dependencyGraph = dependencyGraph
     )
-    val waves = waveLevels.toSeq
-      .groupMap { case (_, waveIndex) => waveIndex } { case (moduleName, _) =>
+    val depths = depthLevels.toSeq
+      .groupMap { case (_, depthIndex) => depthIndex } { case (moduleName, _) =>
         weightsByModule(moduleName)
       }
       .toSeq
-      .sortBy { case (waveIndex, _) => waveIndex }
-      .map { case (waveIndex, modules) =>
-        StrictDepsCompileWave(
-          index = waveIndex,
+      .sortBy { case (depthIndex, _) => depthIndex }
+      .map { case (depthIndex, modules) =>
+        StrictDepsCompileDepth(
+          index = depthIndex,
           modules = modules.sortBy { weight =>
             (
               -weight.absoluteSources.maxSourceCount,
@@ -334,26 +334,26 @@ object StrictDepsAnalyzer {
           }
         )
       }
-    val targetWaveIndex = directModuleNames
-      .flatMap(waveLevels.get)
+    val targetDepthIndex = directModuleNames
+      .flatMap(depthLevels.get)
       .maxOption
       .map(_ + 1)
       .getOrElse(0)
 
-    CompileWaveData(
-      waves = waves,
-      targetWaveIndex = targetWaveIndex
+    CompileDepthData(
+      depths = depths,
+      targetDepthIndex = targetDepthIndex
     )
   }
 
-  private def compileWaveLevels(
+  private def compileDepthLevels(
       moduleNames: Set[String],
       dependencyGraph: Map[String, Set[String]]
   ): Map[String, Int] = {
     val memo = mutable.Map.empty[String, Int]
     val visiting = mutable.Set.empty[String]
 
-    def waveLevel(moduleName: String): Int = {
+    def depthLevel(moduleName: String): Int = {
       memo.getOrElseUpdate(
         moduleName, {
           if (visiting.contains(moduleName)) {
@@ -363,7 +363,7 @@ object StrictDepsAnalyzer {
             val dependencyLevels = dependencyGraph
               .getOrElse(moduleName, Set.empty)
               .filter(moduleNames.contains)
-              .map(waveLevel)
+              .map(depthLevel)
             visiting -= moduleName
 
             if (dependencyLevels.isEmpty) {
@@ -376,7 +376,7 @@ object StrictDepsAnalyzer {
       )
     }
 
-    moduleNames.toSeq.sorted.foreach(waveLevel)
+    moduleNames.toSeq.sorted.foreach(depthLevel)
     memo.toMap
   }
 
@@ -592,9 +592,9 @@ object StrictDepsAnalyzer {
       sources: Set[String]
   )
 
-  private final case class CompileWaveData(
-      waves: Seq[StrictDepsCompileWave],
-      targetWaveIndex: Int
+  private final case class CompileDepthData(
+      depths: Seq[StrictDepsCompileDepth],
+      targetDepthIndex: Int
   )
 
   private def dependencyModule(module: AnalyzedModule): DependencyModule = {

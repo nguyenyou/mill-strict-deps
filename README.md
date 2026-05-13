@@ -1,5 +1,8 @@
 # mill-strict-deps
 
+![Scala3](https://img.shields.io/badge/Scala%203-%23de3423.svg?logo=scala&logoColor=white)
+![Maven Central Version](https://img.shields.io/maven-central/v/io.github.nguyenyou/mill-strict-deps_mill1_3)
+
 [Bazel's Strict Java Deps and `unused_deps`](https://blog.bazel.build/2017/06/28/sjd-unused_deps.html)
 starts from a simple question:
 
@@ -208,11 +211,11 @@ are real, but provide many classes or source files the client never reaches.
 
 ```scala
 //| mvnDeps:
-//| - io.github.nguyenyou::mill-strict-deps::0.1.0
+//| - io.github.nguyenyou::mill-strict-deps::1.3.1
 ```
 
 The `::version` shorthand appends `_mill$MILL_BIN_PLATFORM`, so on Mill 1.x it
-resolves to `mill-strict-deps_mill1`.
+resolves to the Maven Central artifact `mill-strict-deps_mill1_3`.
 
 Mix the trait into a JVM module:
 

@@ -4,9 +4,9 @@ object StrictDepsWeightRenderer {
   private val MetricHeader = "metric"
   private val ModuleHeader = "module"
   private val RelationshipHeader = "relationship"
-  private val OwnWeightHeader = "own source weight"
-  private val AbsoluteWeightHeader = "absolute source weight"
-  private val SourceCountHeader = "source count"
+  private val OwnWeightHeader = "own weight"
+  private val AbsoluteWeightHeader = "absolute weight"
+  private val SourceCountHeader = "count"
   private val NoteHeader = "note"
 
   def render(

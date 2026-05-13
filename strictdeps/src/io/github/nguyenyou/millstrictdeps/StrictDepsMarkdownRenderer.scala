@@ -118,7 +118,7 @@ object StrictDepsMarkdownRenderer {
       builder.append("_No dependency module sources recorded by Zinc._\n\n")
     } else {
       builder.append(
-        "| module | relationship | own sources | absolute sources | delta sources | transitive modules | direct deps |\n"
+        "| module | relationship | own weight | absolute weight | delta weight | transitive modules | direct deps |\n"
       )
       builder.append("| --- | --- | ---: | ---: | ---: | ---: | --- |\n")
       weights.foreach { weight =>

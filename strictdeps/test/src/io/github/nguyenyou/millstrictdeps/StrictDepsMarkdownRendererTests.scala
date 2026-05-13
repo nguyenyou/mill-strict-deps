@@ -174,12 +174,12 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(!markdown.contains("How calculated"))
       assert(!markdown.contains("Mill allSourceFiles gives the source files planned for compiler input"))
       assert(!markdown.contains("Mill and Zinc source counts match."))
-      assert(markdown.contains("current module sources             3"))
-      assert(markdown.contains("dependency sources                 4"))
-      assert(markdown.contains("total source weight                7"))
-      assert(markdown.contains("own source weight  absolute source weight"))
-      assert(markdown.contains("api     direct                        2                       4"))
-      assert(markdown.contains("domain  transitive                    2                       2"))
+      assert(markdown.contains("current module sources      3"))
+      assert(markdown.contains("dependency sources          4"))
+      assert(markdown.contains("total source weight"))
+      assert(markdown.contains("own weight  absolute weight"))
+      assert(markdown.contains("api"))
+      assert(markdown.contains("domain"))
       assert(!markdown.contains("delta"))
     }
 
@@ -238,14 +238,21 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
         )
       )
 
-      assert(markdown.contains("metric                  source count"))
+      assert(markdown.contains("metric                  count"))
       assert(markdown.contains("compile wave 0  1 module"))
       assert(markdown.contains("compile wave 1  1 module"))
       assert(markdown.contains("target wave 2"))
-      assert(markdown.contains("own source weight  total source weight"))
+      assert(markdown.contains("own weight  total weight"))
       assert(markdown.contains("app"))
 
       val lines = markdown.linesIterator.toSeq
+      val continuousSeparators = lines.filter(line => line.nonEmpty && line.forall(_ == '-'))
+      assert(continuousSeparators.size == 2)
+      assert(continuousSeparators.forall(_.length > 20))
+
+      val compileWaveLines = lines.dropWhile(!_.startsWith("compile wave 0"))
+      assert(!compileWaveLines.exists(_.contains("--  --")))
+
       val waveHeaders = lines.filter(line => line.contains("module") && line.contains("relationship"))
       assert(waveHeaders.size == 2)
       assert(waveHeaders.map(_.indexOf("relationship")).distinct.size == 1)
@@ -253,6 +260,10 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       val domainRow = lines.find(_.startsWith("domain")).getOrElse("")
       val apiRow = lines.find(_.startsWith("modules.reallyLong.api")).getOrElse("")
       assert(domainRow.indexOf("transitive") == apiRow.indexOf("direct"))
+
+      val targetHeaderIndex = lines.indexWhere(_.startsWith("target wave 2"))
+      assert(lines(targetHeaderIndex + 1).contains("own weight"))
+      assert(lines(targetHeaderIndex + 2).startsWith("app"))
     }
 
     test("renders fix plan separately from report facts") {

@@ -2,13 +2,14 @@ package io.github.nguyenyou.millstrictdeps
 
 object StrictDepsCompileWavesRenderer {
   private val MetricHeader = "metric"
+  private val WaveHeader = "wave"
   private val ModuleHeader = "module"
   private val RelationshipHeader = "relationship"
   private val OwnWeightHeader = "own weight"
   private val AbsoluteWeightHeader = "absolute weight"
-  private val TotalWeightHeader = "total weight"
   private val SourceCountHeader = "count"
   private val NoteHeader = "note"
+  private val TargetRelationship = "target"
 
   def render(
       moduleName: String,
@@ -18,21 +19,30 @@ object StrictDepsCompileWavesRenderer {
     appendSummary(builder, report)
     appendComparisonNote(builder, report)
 
-    if (report.compileWaves.isEmpty) {
-      builder.append("No dependency module sources recorded by Mill allSourceFiles or Zinc analysis.\n\n")
-    } else {
-      val layout = waveLayout(report.compileWaves)
-      report.compileWaves.zipWithIndex.foreach { case (wave, index) =>
-        appendWave(builder, wave, layout)
-        if (index < report.compileWaves.size - 1) {
-          appendSeparator(builder, layout.tableWidth)
-        }
-      }
+    val layout = waveLayout(report.compileWaves, moduleName, report)
+    appendWaveHeader(builder, layout)
+    report.compileWaves.foreach { wave =>
+      appendWave(builder, wave, layout)
       appendSeparator(builder, layout.tableWidth)
     }
-
-    appendTarget(builder, moduleName, report)
+    appendTarget(builder, moduleName, report, layout)
     builder.result()
+  }
+
+  private def appendWaveHeader(
+      builder: StringBuilder,
+      layout: WaveLayout
+  ): Unit = {
+    appendTableRow(
+      builder = builder,
+      layout = layout,
+      waveValue = WaveHeader,
+      moduleValue = ModuleHeader,
+      relationshipValue = RelationshipHeader,
+      ownValue = OwnWeightHeader,
+      absoluteValue = AbsoluteWeightHeader,
+      noteValue = Option.when(layout.showNotes)(NoteHeader).getOrElse("")
+    )
   }
 
   private def appendWave(
@@ -40,93 +50,135 @@ object StrictDepsCompileWavesRenderer {
       wave: StrictDepsCompileWave,
       layout: WaveLayout
   ): Unit = {
-    builder.append(s"compile wave ${wave.index}  ${moduleCountLabel(wave.modules.size)}\n")
-
     val ownWeightValues = wave.modules.map(weight => formatComparison(weight.ownSources))
     val absoluteWeightValues = wave.modules.map(weight => formatComparison(weight.absoluteSources))
     val notes = wave.modules.map(rowNote)
 
-    builder.append(padRight(ModuleHeader, layout.moduleWidth))
-    builder.append("  ")
-    builder.append(padRight(RelationshipHeader, layout.relationshipWidth))
-    builder.append("  ")
-    builder.append(padLeft(OwnWeightHeader, layout.ownWeightWidth))
-    builder.append("  ")
-    builder.append(padLeft(AbsoluteWeightHeader, layout.absoluteWeightWidth))
-    if (layout.showNotes) {
-      builder.append("  ")
-      builder.append(padRight(NoteHeader, layout.noteWidth))
+    wave.modules.zip(ownWeightValues).zip(absoluteWeightValues).zip(notes).zipWithIndex.foreach {
+      case ((((weight, ownValue), absoluteValue), note), index) =>
+        appendTableRow(
+          builder = builder,
+          layout = layout,
+          waveValue = waveCell(wave, index),
+          moduleValue = display(weight.moduleName),
+          relationshipValue = relationship(weight),
+          ownValue = ownValue,
+          absoluteValue = absoluteValue,
+          noteValue = note
+        )
     }
-    builder.append("\n")
 
-    wave.modules.zip(ownWeightValues).zip(absoluteWeightValues).zip(notes).foreach {
-      case (((weight, ownValue), absoluteValue), note) =>
-        builder.append(padRight(display(weight.moduleName), layout.moduleWidth))
-        builder.append("  ")
-        builder.append(padRight(relationship(weight), layout.relationshipWidth))
-        builder.append("  ")
-        builder.append(padLeft(ownValue, layout.ownWeightWidth))
-        builder.append("  ")
-        builder.append(padLeft(absoluteValue, layout.absoluteWeightWidth))
-        if (layout.showNotes) {
-          builder.append("  ")
-          builder.append(padRight(note, layout.noteWidth))
-        }
-        builder.append("\n")
+    if (wave.modules.size <= 1) {
+      appendTableRow(
+        builder = builder,
+        layout = layout,
+        waveValue = moduleCountLabel(wave.modules.size),
+        moduleValue = "",
+        relationshipValue = "",
+        ownValue = "",
+        absoluteValue = "",
+        noteValue = ""
+      )
     }
   }
 
-  private def waveLayout(waves: Seq[StrictDepsCompileWave]): WaveLayout = {
+  private def waveCell(
+      wave: StrictDepsCompileWave,
+      rowIndex: Int
+  ): String = {
+    if (rowIndex == 0) {
+      s"wave ${wave.index}"
+    } else if (rowIndex == 1) {
+      moduleCountLabel(wave.modules.size)
+    } else {
+      ""
+    }
+  }
+
+  private def waveLayout(
+      waves: Seq[StrictDepsCompileWave],
+      moduleName: String,
+      report: StrictDepsWeightReport
+  ): WaveLayout = {
     val weights = waves.flatMap(_.modules)
+    val targetOwnValue = formatComparison(report.currentModuleSources)
+    val targetAbsoluteValue = formatComparison(report.totalSources)
+    val targetNoteValue = targetNote(report)
     val ownWeightValues = weights.map(weight => formatComparison(weight.ownSources))
     val absoluteWeightValues = weights.map(weight => formatComparison(weight.absoluteSources))
     val notes = weights.map(rowNote)
+    val waveValues = waves.flatMap { wave =>
+      Seq(s"wave ${wave.index}", moduleCountLabel(wave.modules.size))
+    } ++ Seq("target", s"wave ${report.targetWaveIndex}")
 
     WaveLayout(
-      moduleWidth = maxWidth(ModuleHeader +: weights.map(weight => display(weight.moduleName))),
-      relationshipWidth = maxWidth(RelationshipHeader +: weights.map(relationship)),
-      ownWeightWidth = maxWidth(OwnWeightHeader +: ownWeightValues),
-      absoluteWeightWidth = maxWidth(AbsoluteWeightHeader +: absoluteWeightValues),
-      noteWidth = maxWidth(NoteHeader +: notes),
-      showNotes = notes.exists(_.nonEmpty)
+      waveWidth = maxWidth(WaveHeader +: waveValues),
+      moduleWidth = maxWidth(ModuleHeader +: (weights.map(weight => display(weight.moduleName)) :+ display(moduleName))),
+      relationshipWidth = maxWidth(RelationshipHeader +: (weights.map(relationship) :+ TargetRelationship)),
+      ownWeightWidth = maxWidth(OwnWeightHeader +: (ownWeightValues :+ targetOwnValue)),
+      absoluteWeightWidth = maxWidth(AbsoluteWeightHeader +: (absoluteWeightValues :+ targetAbsoluteValue)),
+      noteWidth = maxWidth(NoteHeader +: (notes :+ targetNoteValue)),
+      showNotes = (notes :+ targetNoteValue).exists(_.nonEmpty)
     )
   }
 
   private def appendTarget(
       builder: StringBuilder,
       moduleName: String,
-      report: StrictDepsWeightReport
+      report: StrictDepsWeightReport,
+      layout: WaveLayout
   ): Unit = {
     val ownValue = formatComparison(report.currentModuleSources)
     val totalValue = formatComparison(report.totalSources)
     val note = targetNote(report)
-    val showNote = note.nonEmpty
-    val moduleWidth = maxWidth(Seq(ModuleHeader, display(moduleName)))
-    val ownWeightWidth = maxWidth(Seq(OwnWeightHeader, ownValue))
-    val totalWeightWidth = maxWidth(Seq(TotalWeightHeader, totalValue))
-    val noteWidth = maxWidth(Seq(NoteHeader, note))
 
-    builder.append(s"target wave ${report.targetWaveIndex}\n")
-    builder.append(padRight(ModuleHeader, moduleWidth))
-    builder.append("  ")
-    builder.append(padLeft(OwnWeightHeader, ownWeightWidth))
-    builder.append("  ")
-    builder.append(padLeft(TotalWeightHeader, totalWeightWidth))
-    if (showNote) {
-      builder.append("  ")
-      builder.append(padRight(NoteHeader, noteWidth))
-    }
-    builder.append("\n")
+    appendTableRow(
+      builder = builder,
+      layout = layout,
+      waveValue = "target",
+      moduleValue = display(moduleName),
+      relationshipValue = TargetRelationship,
+      ownValue = ownValue,
+      absoluteValue = totalValue,
+      noteValue = note
+    )
+    appendTableRow(
+      builder = builder,
+      layout = layout,
+      waveValue = s"wave ${report.targetWaveIndex}",
+      moduleValue = "",
+      relationshipValue = "",
+      ownValue = "",
+      absoluteValue = "",
+      noteValue = ""
+    )
+  }
 
-    builder.append(padRight(display(moduleName), moduleWidth))
-    builder.append("  ")
-    builder.append(padLeft(ownValue, ownWeightWidth))
-    builder.append("  ")
-    builder.append(padLeft(totalValue, totalWeightWidth))
-    if (showNote) {
-      builder.append("  ")
-      builder.append(padRight(note, noteWidth))
+  private def appendTableRow(
+      builder: StringBuilder,
+      layout: WaveLayout,
+      waveValue: String,
+      moduleValue: String,
+      relationshipValue: String,
+      ownValue: String,
+      absoluteValue: String,
+      noteValue: String
+  ): Unit = {
+    val row = new StringBuilder
+    row.append(padRight(waveValue, layout.waveWidth))
+    row.append("  ")
+    row.append(padRight(moduleValue, layout.moduleWidth))
+    row.append("  ")
+    row.append(padRight(relationshipValue, layout.relationshipWidth))
+    row.append("  ")
+    row.append(padLeft(ownValue, layout.ownWeightWidth))
+    row.append("  ")
+    row.append(padLeft(absoluteValue, layout.absoluteWeightWidth))
+    if (layout.showNotes) {
+      row.append("  ")
+      row.append(padRight(noteValue, layout.noteWidth))
     }
+    builder.append(trimRight(row.result()))
     builder.append("\n")
   }
 
@@ -276,6 +328,10 @@ object StrictDepsCompileWavesRenderer {
     (" " * (width - value.length)) + value
   }
 
+  private def trimRight(value: String): String = {
+    value.reverse.dropWhile(_.isWhitespace).reverse
+  }
+
   private def display(value: String): String = {
     value
       .replace("\r", " ")
@@ -283,6 +339,7 @@ object StrictDepsCompileWavesRenderer {
   }
 
   private final case class WaveLayout(
+      waveWidth: Int,
       moduleWidth: Int,
       relationshipWidth: Int,
       ownWeightWidth: Int,
@@ -291,7 +348,8 @@ object StrictDepsCompileWavesRenderer {
       showNotes: Boolean
   ) {
     def tableWidth: Int = {
-      moduleWidth +
+      waveWidth +
+        2 + moduleWidth +
         2 + relationshipWidth +
         2 + ownWeightWidth +
         2 + absoluteWeightWidth +

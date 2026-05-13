@@ -82,10 +82,10 @@ trait StrictDepsModule extends ScalaModule { outer =>
     Result.Success(())
   }
 
-  def strictDepsCompileWaves(): Command[Unit] = Task.Command {
+  def strictDepsCompileDepth(): Command[Unit] = Task.Command {
     val report = analyzeStrictDepsWeight()()
     Task.log.info(
-      "\n" + StrictDepsCompileWavesRenderer.render(
+      "\n" + StrictDepsCompileDepthRenderer.render(
         moduleName = moduleSegments.render,
         report = report
       )

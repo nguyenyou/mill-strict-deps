@@ -273,12 +273,12 @@ object StrictDepsModuleTests extends TestSuite {
       }
     }
 
-    test("runs strictDepsCompileWaves command") {
+    test("runs strictDepsCompileDepth command") {
       val resourceFolder = os.Path(sys.env("MILL_TEST_RESOURCE_DIR"))
       UnitTester(StrictDepsFixtureBuild, resourceFolder / "strict-deps-project").scoped { eval =>
-        eval(StrictDepsFixtureBuild.app.strictDepsCompileWaves()) match {
+        eval(StrictDepsFixtureBuild.app.strictDepsCompileDepth()) match {
           case Left(failure) =>
-            throw new Exception(s"Unexpected strictDepsCompileWaves failure: $failure")
+            throw new Exception(s"Unexpected strictDepsCompileDepth failure: $failure")
           case Right(_) =>
             ()
         }

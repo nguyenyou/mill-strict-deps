@@ -1,8 +1,8 @@
 package io.github.nguyenyou.millstrictdeps
 
-object StrictDepsCompileWavesRenderer {
+object StrictDepsCompileDepthRenderer {
   private val MetricHeader = "metric"
-  private val WaveHeader = "wave"
+  private val DepthHeader = "depth"
   private val ModuleHeader = "module"
   private val RelationshipHeader = "relationship"
   private val OwnWeightHeader = "own weight"
@@ -19,24 +19,24 @@ object StrictDepsCompileWavesRenderer {
     appendSummary(builder, report)
     appendComparisonNote(builder, report)
 
-    val layout = waveLayout(report.compileWaves, moduleName, report)
-    appendWaveHeader(builder, layout)
-    report.compileWaves.foreach { wave =>
-      appendWave(builder, wave, layout)
+    val layout = depthLayout(report.compileDepths, moduleName, report)
+    appendDepthHeader(builder, layout)
+    report.compileDepths.foreach { depth =>
+      appendDepth(builder, depth, layout)
       appendSeparator(builder, layout.tableWidth)
     }
     appendTarget(builder, moduleName, report, layout)
     builder.result()
   }
 
-  private def appendWaveHeader(
+  private def appendDepthHeader(
       builder: StringBuilder,
-      layout: WaveLayout
+      layout: DepthLayout
   ): Unit = {
     appendTableRow(
       builder = builder,
       layout = layout,
-      waveValue = WaveHeader,
+      depthValue = DepthHeader,
       moduleValue = ModuleHeader,
       relationshipValue = RelationshipHeader,
       ownValue = OwnWeightHeader,
@@ -45,21 +45,21 @@ object StrictDepsCompileWavesRenderer {
     )
   }
 
-  private def appendWave(
+  private def appendDepth(
       builder: StringBuilder,
-      wave: StrictDepsCompileWave,
-      layout: WaveLayout
+      depth: StrictDepsCompileDepth,
+      layout: DepthLayout
   ): Unit = {
-    val ownWeightValues = wave.modules.map(weight => formatComparison(weight.ownSources))
-    val absoluteWeightValues = wave.modules.map(weight => formatComparison(weight.absoluteSources))
-    val notes = wave.modules.map(rowNote)
+    val ownWeightValues = depth.modules.map(weight => formatComparison(weight.ownSources))
+    val absoluteWeightValues = depth.modules.map(weight => formatComparison(weight.absoluteSources))
+    val notes = depth.modules.map(rowNote)
 
-    wave.modules.zip(ownWeightValues).zip(absoluteWeightValues).zip(notes).zipWithIndex.foreach {
+    depth.modules.zip(ownWeightValues).zip(absoluteWeightValues).zip(notes).zipWithIndex.foreach {
       case ((((weight, ownValue), absoluteValue), note), index) =>
         appendTableRow(
           builder = builder,
           layout = layout,
-          waveValue = waveCell(wave, index),
+          depthValue = depthCell(depth, index),
           moduleValue = display(weight.moduleName),
           relationshipValue = relationship(weight),
           ownValue = ownValue,
@@ -68,11 +68,11 @@ object StrictDepsCompileWavesRenderer {
         )
     }
 
-    if (wave.modules.size <= 1) {
+    if (depth.modules.size <= 1) {
       appendTableRow(
         builder = builder,
         layout = layout,
-        waveValue = moduleCountLabel(wave.modules.size),
+        depthValue = moduleCountLabel(depth.modules.size),
         moduleValue = "",
         relationshipValue = "",
         ownValue = "",
@@ -82,37 +82,37 @@ object StrictDepsCompileWavesRenderer {
     }
   }
 
-  private def waveCell(
-      wave: StrictDepsCompileWave,
+  private def depthCell(
+      depth: StrictDepsCompileDepth,
       rowIndex: Int
   ): String = {
     if (rowIndex == 0) {
-      s"wave ${wave.index}"
+      s"depth ${depth.index}"
     } else if (rowIndex == 1) {
-      moduleCountLabel(wave.modules.size)
+      moduleCountLabel(depth.modules.size)
     } else {
       ""
     }
   }
 
-  private def waveLayout(
-      waves: Seq[StrictDepsCompileWave],
+  private def depthLayout(
+      depths: Seq[StrictDepsCompileDepth],
       moduleName: String,
       report: StrictDepsWeightReport
-  ): WaveLayout = {
-    val weights = waves.flatMap(_.modules)
+  ): DepthLayout = {
+    val weights = depths.flatMap(_.modules)
     val targetOwnValue = formatComparison(report.currentModuleSources)
     val targetAbsoluteValue = formatComparison(report.totalSources)
     val targetNoteValue = targetNote(report)
     val ownWeightValues = weights.map(weight => formatComparison(weight.ownSources))
     val absoluteWeightValues = weights.map(weight => formatComparison(weight.absoluteSources))
     val notes = weights.map(rowNote)
-    val waveValues = waves.flatMap { wave =>
-      Seq(s"wave ${wave.index}", moduleCountLabel(wave.modules.size))
-    } ++ Seq("target", s"wave ${report.targetWaveIndex}")
+    val depthValues = depths.flatMap { depth =>
+      Seq(s"depth ${depth.index}", moduleCountLabel(depth.modules.size))
+    } ++ Seq("target", s"depth ${report.targetDepthIndex}")
 
-    WaveLayout(
-      waveWidth = maxWidth(WaveHeader +: waveValues),
+    DepthLayout(
+      depthWidth = maxWidth(DepthHeader +: depthValues),
       moduleWidth = maxWidth(ModuleHeader +: (weights.map(weight => display(weight.moduleName)) :+ display(moduleName))),
       relationshipWidth = maxWidth(RelationshipHeader +: (weights.map(relationship) :+ TargetRelationship)),
       ownWeightWidth = maxWidth(OwnWeightHeader +: (ownWeightValues :+ targetOwnValue)),
@@ -126,7 +126,7 @@ object StrictDepsCompileWavesRenderer {
       builder: StringBuilder,
       moduleName: String,
       report: StrictDepsWeightReport,
-      layout: WaveLayout
+      layout: DepthLayout
   ): Unit = {
     val ownValue = formatComparison(report.currentModuleSources)
     val totalValue = formatComparison(report.totalSources)
@@ -135,7 +135,7 @@ object StrictDepsCompileWavesRenderer {
     appendTableRow(
       builder = builder,
       layout = layout,
-      waveValue = "target",
+      depthValue = "target",
       moduleValue = display(moduleName),
       relationshipValue = TargetRelationship,
       ownValue = ownValue,
@@ -145,7 +145,7 @@ object StrictDepsCompileWavesRenderer {
     appendTableRow(
       builder = builder,
       layout = layout,
-      waveValue = s"wave ${report.targetWaveIndex}",
+      depthValue = s"depth ${report.targetDepthIndex}",
       moduleValue = "",
       relationshipValue = "",
       ownValue = "",
@@ -156,8 +156,8 @@ object StrictDepsCompileWavesRenderer {
 
   private def appendTableRow(
       builder: StringBuilder,
-      layout: WaveLayout,
-      waveValue: String,
+      layout: DepthLayout,
+      depthValue: String,
       moduleValue: String,
       relationshipValue: String,
       ownValue: String,
@@ -165,7 +165,7 @@ object StrictDepsCompileWavesRenderer {
       noteValue: String
   ): Unit = {
     val row = new StringBuilder
-    row.append(padRight(waveValue, layout.waveWidth))
+    row.append(padRight(depthValue, layout.depthWidth))
     row.append("  ")
     row.append(padRight(moduleValue, layout.moduleWidth))
     row.append("  ")
@@ -338,8 +338,8 @@ object StrictDepsCompileWavesRenderer {
       .replace("\n", " ")
   }
 
-  private final case class WaveLayout(
-      waveWidth: Int,
+  private final case class DepthLayout(
+      depthWidth: Int,
       moduleWidth: Int,
       relationshipWidth: Int,
       ownWeightWidth: Int,
@@ -348,7 +348,7 @@ object StrictDepsCompileWavesRenderer {
       showNotes: Boolean
   ) {
     def tableWidth: Int = {
-      waveWidth +
+      depthWidth +
         2 + moduleWidth +
         2 + relationshipWidth +
         2 + ownWeightWidth +

@@ -111,8 +111,9 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(markdown.contains("| reachable needed | 3 (60.0%) | 3 (60.0%) |"))
       assert(markdown.contains("| `api` | direct | 2 / 3 (66.7%) | 2 / 3 (66.7%) | 1 |"))
       assert(markdown.contains("Dependency Source Weight"))
-      assert(markdown.contains("| `api` | direct | 2 | 4 | 4 (remove) | 1 | `domain` |"))
-      assert(markdown.contains("| `domain` | transitive | 2 | 2 | 0 (add) | 0 |"))
+      assert(markdown.contains("own lines | absolute lines | delta lines | own classes | absolute classes"))
+      assert(markdown.contains("| `api` | direct | 2 | 4 | 4 (remove) | 0 | 0 | 0 | 0 | 0 | 1 | `domain` |"))
+      assert(markdown.contains("| `domain` | transitive | 2 | 2 | 0 (add) | 0 | 0 | 0 | 0 | 0 | 0 |"))
       assert(markdown.contains("Dependency Usage Weight"))
       assert(markdown.contains("| `api` | direct | 2 | 66.7% | 2 / 4 (50.0%)"))
       assert(markdown.contains("| `domain` | transitive | 1 | 33.3% | 1 / 2 (50.0%)"))
@@ -178,18 +179,21 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(!markdown.contains("How calculated"))
       assert(!markdown.contains("Mill allSourceFiles gives the source files planned for compiler input"))
       assert(!markdown.contains("Mill and Zinc source counts match."))
-      assert(markdown.contains("current module sources      3"))
-      assert(markdown.contains("dependency sources          4"))
+      assert(markdown.linesIterator.exists(line => line.startsWith("current module sources") && line.trim.endsWith("3")))
+      assert(markdown.linesIterator.exists(line => line.startsWith("dependency sources") && line.trim.endsWith("4")))
       assert(markdown.contains("total source weight"))
       assert(markdown.contains("own weight  absolute weight  delta weight"))
+      assert(markdown.contains("own lines  absolute lines  delta lines  own classes  absolute classes"))
       assert(markdown.contains("api"))
       assert(markdown.contains("domain"))
       val apiRow = markdown.linesIterator.find(_.startsWith("api")).getOrElse("")
       val domainRow = markdown.linesIterator.find(_.startsWith("domain")).getOrElse("")
+      val apiTokens = apiRow.trim.split("\\s+").toSeq
+      val domainTokens = domainRow.trim.split("\\s+").toSeq
       assert(apiRow.contains("direct"))
-      assert(apiRow.endsWith("4"))
+      assert(apiTokens.take(5) == Seq("api", "direct", "2", "4", "4"))
       assert(domainRow.contains("transitive"))
-      assert(domainRow.endsWith("0"))
+      assert(domainTokens.take(5) == Seq("domain", "transitive", "2", "2", "0"))
     }
 
     test("renders Mill and Zinc source weight differences") {
@@ -217,7 +221,7 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(markdown.contains("4 Mill / 3 Zinc"))
       assert(markdown.contains("4 Mill / 2 Zinc"))
       assert(markdown.contains("Mill-Zinc +1"))
-      assert(markdown.contains("own Mill-Zinc +1; absolute Mill-Zinc +1; delta Mill-Zinc +2"))
+      assert(markdown.contains("own weight Mill-Zinc +1; absolute weight Mill-Zinc +1; delta weight Mill-Zinc +2"))
       assert(markdown.contains("Differences usually mean generated or wrapped sources"))
     }
 
@@ -251,8 +255,9 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
         )
       )
 
-      assert(markdown.contains("metric                  count"))
+      assert(markdown.linesIterator.exists(line => line.startsWith("metric") && line.contains("count")))
       assert(markdown.contains("own weight  absolute weight  delta weight"))
+      assert(markdown.contains("own lines  absolute lines  delta lines  own classes  absolute classes"))
       assert(markdown.contains("depth 0"))
       assert(markdown.contains("1 module"))
       assert(markdown.contains("depth 1"))
@@ -276,15 +281,20 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
 
       val domainRow = lines.find(_.contains("domain")).getOrElse("")
       val apiRow = lines.find(_.contains("modules.reallyLong.api")).getOrElse("")
+      val domainTokens = domainRow.trim.split("\\s+").toSeq
+      val apiTokens = apiRow.trim.split("\\s+").toSeq
       assert(domainRow.indexOf("transitive") == apiRow.indexOf("direct"))
-      assert(domainRow.endsWith("2"))
-      assert(apiRow.endsWith("2"))
+      assert(domainTokens.contains("transitive"))
+      assert(apiTokens.contains("direct"))
+      assert(domainTokens.count(_ == "2") >= 3)
+      assert(apiTokens.count(_ == "2") >= 2)
 
       val targetRow = lines.find(_.startsWith("target")).getOrElse("")
       val targetDepthRow = lines.find(_.startsWith("depth 2")).getOrElse("")
+      val targetTokens = targetRow.trim.split("\\s+").toSeq
       assert(targetRow.contains("app"))
       assert(targetRow.contains("target"))
-      assert(targetRow.endsWith("3"))
+      assert(targetTokens.contains("3"))
       assert(targetDepthRow.nonEmpty)
       assert(lines.forall(line => !line.endsWith(" ")))
     }

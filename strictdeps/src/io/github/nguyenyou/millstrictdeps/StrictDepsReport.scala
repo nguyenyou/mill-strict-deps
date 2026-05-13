@@ -27,7 +27,8 @@ final case class StrictDepsModuleUsage(
 final case class StrictDepsModuleSnapshot(
     moduleName: String,
     analysisFile: os.Path,
-    directDependencyModuleNames: Seq[String] = Seq.empty
+    directDependencyModuleNames: Seq[String] = Seq.empty,
+    sourceFiles: Seq[String] = Seq.empty
 )
 
 final case class StrictDepsModuleWeightSnapshot(
@@ -44,7 +45,12 @@ final case class StrictDepsModuleDependencyWeight(
     ownSourceCount: Int,
     absoluteSourceCount: Int,
     deltaSourceCount: Int,
-    deltaKind: String
+    deltaKind: String,
+    ownSourceLineCount: Int = 0,
+    absoluteSourceLineCount: Int = 0,
+    deltaSourceLineCount: Int = 0,
+    ownClassCount: Int = 0,
+    absoluteClassCount: Int = 0
 ) {
   def directDependencyModuleCount: Int = directDependencyModuleNames.size
   def transitiveDependencyModuleCount: Int = transitiveDependencyModuleNames.size
@@ -55,6 +61,12 @@ final case class StrictDepsWeightReport(
     currentModuleSources: StrictDepsSourceWeightComparison,
     dependencySources: StrictDepsSourceWeightComparison,
     totalSources: StrictDepsSourceWeightComparison,
+    currentModuleSourceLines: StrictDepsSourceWeightComparison = StrictDepsSourceWeightComparison(0, 0),
+    dependencySourceLines: StrictDepsSourceWeightComparison = StrictDepsSourceWeightComparison(0, 0),
+    totalSourceLines: StrictDepsSourceWeightComparison = StrictDepsSourceWeightComparison(0, 0),
+    currentModuleClassCount: Int = 0,
+    dependencyClassCount: Int = 0,
+    totalClassCount: Int = 0,
     dependencyWeights: Seq[StrictDepsModuleWeightComparison],
     compileDepths: Seq[StrictDepsCompileDepth] = Seq.empty,
     targetDepthIndex: Int = 0
@@ -74,7 +86,13 @@ final case class StrictDepsModuleWeightComparison(
     ownSources: StrictDepsSourceWeightComparison,
     absoluteSources: StrictDepsSourceWeightComparison,
     deltaSources: StrictDepsSourceWeightComparison = StrictDepsSourceWeightComparison(0, 0),
-    compileDepthDeltaSources: StrictDepsSourceWeightComparison = StrictDepsSourceWeightComparison(0, 0)
+    compileDepthDeltaSources: StrictDepsSourceWeightComparison = StrictDepsSourceWeightComparison(0, 0),
+    ownSourceLines: StrictDepsSourceWeightComparison = StrictDepsSourceWeightComparison(0, 0),
+    absoluteSourceLines: StrictDepsSourceWeightComparison = StrictDepsSourceWeightComparison(0, 0),
+    deltaSourceLines: StrictDepsSourceWeightComparison = StrictDepsSourceWeightComparison(0, 0),
+    compileDepthDeltaSourceLines: StrictDepsSourceWeightComparison = StrictDepsSourceWeightComparison(0, 0),
+    ownClassCount: Int = 0,
+    absoluteClassCount: Int = 0
 )
 
 final case class StrictDepsCompileDepth(

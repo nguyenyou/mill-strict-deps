@@ -2,6 +2,7 @@ package io.github.nguyenyou.millstrictdeps
 
 import scala.collection.mutable
 import scala.math.round
+import scala.util.control.NonFatal
 
 import sbt.internal.inc.Analysis
 import sbt.internal.inc.FileAnalysisStore
@@ -17,11 +18,18 @@ object StrictDepsAnalyzer {
       ignoredModuleNames: Set[String]
   ): StrictDepsWeightReport = {
     val currentMillSources = currentModuleSourceFiles
-    val currentZincSources = sourceFiles(readAnalysis(currentAnalysisFile))
+    val currentAnalysis = readAnalysis(currentAnalysisFile)
+    val currentZincSources = sourceFiles(currentAnalysis)
+    val currentZincClasses = definedClasses(currentAnalysis)
+    val currentMillSourceLines = sourceLineCounts(currentMillSources)
+    val currentZincSourceLines = sourceLineCounts(currentZincSources)
     val millDependencyModules = millTransitiveModules.map(weightModule)
     val zincDependencyModules = zincTransitiveModules.map(analyzeDependencyModule)
     val millDependencySources = millDependencyModules.flatMap(_.sources).toSet
     val zincDependencySources = zincDependencyModules.flatMap(_.sources).toSet
+    val millDependencySourceLines = sourceLineCountsForModules(millDependencyModules)
+    val zincDependencySourceLines = sourceLineCountsForModules(zincDependencyModules)
+    val zincDependencyClasses = zincDependencyModules.flatMap(_.classes).toSet
     val millDependencyWeightSources = computeDependencyWeightSources(
       dependencyModules = millDependencyModules,
       ignoredModuleNames = ignoredModuleNames
@@ -45,25 +53,43 @@ object StrictDepsAnalyzer {
           absoluteSources = StrictDepsSourceWeightComparison(
             millSourceCount = millWeight.map(_.absoluteSources.size).getOrElse(0),
             zincSourceCount = zincWeight.map(_.absoluteSources.size).getOrElse(0)
-          )
+          ),
+          ownSourceLines = StrictDepsSourceWeightComparison(
+            millSourceCount = millWeight.map(_.ownSourceLineCount).getOrElse(0),
+            zincSourceCount = zincWeight.map(_.ownSourceLineCount).getOrElse(0)
+          ),
+          absoluteSourceLines = StrictDepsSourceWeightComparison(
+            millSourceCount = millWeight.map(_.absoluteSourceLineCount).getOrElse(0),
+            zincSourceCount = zincWeight.map(_.absoluteSourceLineCount).getOrElse(0)
+          ),
+          ownClassCount = zincWeight.map(_.ownClassCount).getOrElse(0),
+          absoluteClassCount = zincWeight.map(_.absoluteClassCount).getOrElse(0)
         )
       }
     val sortedDependencyWeightModuleNames = dependencyWeightsWithoutDelta
       .sortBy(weightSortKey)
       .map(_.moduleName)
-    val millDeltaSourceCounts = computeDeltaSourceCounts(
+    val millDeltaSourceMetrics = computeDeltaSourceMetrics(
       sortedModuleNames = sortedDependencyWeightModuleNames,
       dependencyWeightSourcesByModule = millDependencyWeightSources
     )
-    val zincDeltaSourceCounts = computeDeltaSourceCounts(
+    val zincDeltaSourceMetrics = computeDeltaSourceMetrics(
       sortedModuleNames = sortedDependencyWeightModuleNames,
       dependencyWeightSourcesByModule = zincDependencyWeightSources
     )
     val dependencyWeightsWithListDelta = dependencyWeightsWithoutDelta.map { weight =>
+      val millDeltaMetrics = millDeltaSourceMetrics
+        .getOrElse(weight.moduleName, DeltaSourceMetrics.empty)
+      val zincDeltaMetrics = zincDeltaSourceMetrics
+        .getOrElse(weight.moduleName, DeltaSourceMetrics.empty)
       weight.copy(
         deltaSources = StrictDepsSourceWeightComparison(
-          millSourceCount = millDeltaSourceCounts.getOrElse(weight.moduleName, 0),
-          zincSourceCount = zincDeltaSourceCounts.getOrElse(weight.moduleName, 0)
+          millSourceCount = millDeltaMetrics.sourceCount,
+          zincSourceCount = zincDeltaMetrics.sourceCount
+        ),
+        deltaSourceLines = StrictDepsSourceWeightComparison(
+          millSourceCount = millDeltaMetrics.sourceLineCount,
+          zincSourceCount = zincDeltaMetrics.sourceLineCount
         )
       )
     }
@@ -75,19 +101,27 @@ object StrictDepsAnalyzer {
     val compileDepthModuleNames = compileDepthDataWithoutDepthDelta.depths.flatMap { depth =>
       depth.modules.map(_.moduleName)
     }
-    val millCompileDepthDeltaSourceCounts = computeDeltaSourceCounts(
+    val millCompileDepthDeltaSourceMetrics = computeDeltaSourceMetrics(
       sortedModuleNames = compileDepthModuleNames,
       dependencyWeightSourcesByModule = millDependencyWeightSources
     )
-    val zincCompileDepthDeltaSourceCounts = computeDeltaSourceCounts(
+    val zincCompileDepthDeltaSourceMetrics = computeDeltaSourceMetrics(
       sortedModuleNames = compileDepthModuleNames,
       dependencyWeightSourcesByModule = zincDependencyWeightSources
     )
     val dependencyWeights = dependencyWeightsWithListDelta.map { weight =>
+      val millDeltaMetrics = millCompileDepthDeltaSourceMetrics
+        .getOrElse(weight.moduleName, DeltaSourceMetrics.empty)
+      val zincDeltaMetrics = zincCompileDepthDeltaSourceMetrics
+        .getOrElse(weight.moduleName, DeltaSourceMetrics.empty)
       weight.copy(
         compileDepthDeltaSources = StrictDepsSourceWeightComparison(
-          millSourceCount = millCompileDepthDeltaSourceCounts.getOrElse(weight.moduleName, 0),
-          zincSourceCount = zincCompileDepthDeltaSourceCounts.getOrElse(weight.moduleName, 0)
+          millSourceCount = millDeltaMetrics.sourceCount,
+          zincSourceCount = zincDeltaMetrics.sourceCount
+        ),
+        compileDepthDeltaSourceLines = StrictDepsSourceWeightComparison(
+          millSourceCount = millDeltaMetrics.sourceLineCount,
+          zincSourceCount = zincDeltaMetrics.sourceLineCount
         )
       )
     }
@@ -115,6 +149,23 @@ object StrictDepsAnalyzer {
         millSourceCount = currentMillSources.union(millDependencySources).size,
         zincSourceCount = currentZincSources.union(zincDependencySources).size
       ),
+      currentModuleSourceLines = StrictDepsSourceWeightComparison(
+        millSourceCount = sourceLineCount(currentMillSources, currentMillSourceLines),
+        zincSourceCount = sourceLineCount(currentZincSources, currentZincSourceLines)
+      ),
+      dependencySourceLines = StrictDepsSourceWeightComparison(
+        millSourceCount = sourceLineCount(millDependencySources, millDependencySourceLines),
+        zincSourceCount = sourceLineCount(zincDependencySources, zincDependencySourceLines)
+      ),
+      totalSourceLines = StrictDepsSourceWeightComparison(
+        millSourceCount = sourceLineCount(currentMillSources, currentMillSourceLines) +
+          sourceLineCount(millDependencySources.diff(currentMillSources), millDependencySourceLines),
+        zincSourceCount = sourceLineCount(currentZincSources, currentZincSourceLines) +
+          sourceLineCount(zincDependencySources.diff(currentZincSources), zincDependencySourceLines)
+      ),
+      currentModuleClassCount = currentZincClasses.size,
+      dependencyClassCount = zincDependencyClasses.size,
+      totalClassCount = currentZincClasses.union(zincDependencyClasses).size,
       dependencyWeights = dependencyWeights,
       compileDepths = compileDepthData.depths,
       targetDepthIndex = compileDepthData.targetDepthIndex
@@ -296,18 +347,24 @@ object StrictDepsAnalyzer {
 
   private def analyzeDependencyModule(module: StrictDepsModuleSnapshot): DependencyModule = {
     val analysis = readAnalysis(module.analysisFile)
+    val sources = sourceFiles(analysis)
     DependencyModule(
       moduleName = module.moduleName,
       directDependencyModuleNames = module.directDependencyModuleNames.distinct.sorted,
-      sources = sourceFiles(analysis)
+      sources = sources,
+      sourceLinesBySource = sourceLineCounts(sources),
+      classes = definedClasses(analysis)
     )
   }
 
   private def weightModule(module: StrictDepsModuleWeightSnapshot): DependencyModule = {
+    val sources = module.sourceFiles.toSet
     DependencyModule(
       moduleName = module.moduleName,
       directDependencyModuleNames = module.directDependencyModuleNames.distinct.sorted,
-      sources = module.sourceFiles.toSet
+      sources = sources,
+      sourceLinesBySource = sourceLineCounts(sources),
+      classes = Set.empty
     )
   }
 
@@ -350,10 +407,21 @@ object StrictDepsAnalyzer {
     val sourcesByModule = dependencyModules
       .map(module => module.moduleName -> module.sources)
       .toMap
+    val sourceLinesByModule = dependencyModules
+      .map(module => module.moduleName -> module.sourceLinesBySource)
+      .toMap
+    val classesByModule = dependencyModules
+      .map(module => module.moduleName -> module.classes)
+      .toMap
     val currentDependencySources = sourcesForDependencyRoots(
       rootModuleNames = directModuleNames,
       dependencyGraph = dependencyGraph,
       sourcesByModule = sourcesByModule
+    )
+    val currentDependencySourceLines = sourceLinesForDependencyRoots(
+      rootModuleNames = directModuleNames,
+      dependencyGraph = dependencyGraph,
+      sourceLinesByModule = sourceLinesByModule
     )
 
     dependencyModules
@@ -361,21 +429,23 @@ object StrictDepsAnalyzer {
       .map { module =>
         val moduleClosure = dependencyModuleClosure(module.moduleName, dependencyGraph)
         val moduleSources = sourcesForModules(moduleClosure, sourcesByModule)
+        val moduleSourceLines = sourceLinesForModules(moduleClosure, sourceLinesByModule)
+        val moduleClasses = classesForModules(moduleClosure, classesByModule)
         val transitiveDependencyModuleNames = moduleClosure
           .filterNot(_ == module.moduleName)
           .toSeq
           .sorted
         val declaredDirect = directModuleNames.contains(module.moduleName)
-        val deltaSourceCount =
+        val deltaSources =
           if (declaredDirect) {
             val dependencySourcesWithoutModule = sourcesForDependencyRoots(
               rootModuleNames = directModuleNames.filterNot(_ == module.moduleName),
               dependencyGraph = dependencyGraph,
               sourcesByModule = sourcesByModule
             )
-            currentDependencySources.diff(dependencySourcesWithoutModule).size
+            currentDependencySources.diff(dependencySourcesWithoutModule)
           } else {
-            moduleSources.diff(currentDependencySources).size
+            moduleSources.diff(currentDependencySources)
           }
         val deltaKind =
           if (declaredDirect) {
@@ -391,8 +461,16 @@ object StrictDepsAnalyzer {
           transitiveDependencyModuleNames = transitiveDependencyModuleNames,
           ownSourceCount = module.sources.size,
           absoluteSourceCount = moduleSources.size,
-          deltaSourceCount = deltaSourceCount,
-          deltaKind = deltaKind
+          deltaSourceCount = deltaSources.size,
+          deltaKind = deltaKind,
+          ownSourceLineCount = sourceLineCount(module.sources, module.sourceLinesBySource),
+          absoluteSourceLineCount = sourceLineCount(moduleSources, moduleSourceLines),
+          deltaSourceLineCount = sourceLineCount(
+            deltaSources,
+            currentDependencySourceLines ++ moduleSourceLines
+          ),
+          ownClassCount = module.classes.size,
+          absoluteClassCount = moduleClasses.size
         )
       }
       .sortBy { weight =>
@@ -415,35 +493,53 @@ object StrictDepsAnalyzer {
     val sourcesByModule = dependencyModules
       .map(module => module.moduleName -> module.sources)
       .toMap
+    val sourceLinesByModule = dependencyModules
+      .map(module => module.moduleName -> module.sourceLinesBySource)
+      .toMap
+    val classesByModule = dependencyModules
+      .map(module => module.moduleName -> module.classes)
+      .toMap
 
     dependencyModules
       .filterNot(module => ignoredModuleNames.contains(module.moduleName))
       .map { module =>
         val moduleClosure = dependencyModuleClosure(module.moduleName, dependencyGraph)
+        val absoluteSources = sourcesForModules(moduleClosure, sourcesByModule)
+        val absoluteSourceLinesBySource = sourceLinesForModules(moduleClosure, sourceLinesByModule)
+        val absoluteClasses = classesForModules(moduleClosure, classesByModule)
 
         DependencyWeightSources(
           moduleName = module.moduleName,
           ownSources = module.sources,
-          absoluteSources = sourcesForModules(moduleClosure, sourcesByModule)
+          absoluteSources = absoluteSources,
+          absoluteSourceLinesBySource = absoluteSourceLinesBySource,
+          ownSourceLineCount = sourceLineCount(module.sources, module.sourceLinesBySource),
+          absoluteSourceLineCount = sourceLineCount(absoluteSources, absoluteSourceLinesBySource),
+          ownClassCount = module.classes.size,
+          absoluteClassCount = absoluteClasses.size
         )
       }
   }
 
-  private def computeDeltaSourceCounts(
+  private def computeDeltaSourceMetrics(
       sortedModuleNames: Seq[String],
       dependencyWeightSourcesByModule: Map[String, DependencyWeightSources]
-  ): Map[String, Int] = {
+  ): Map[String, DeltaSourceMetrics] = {
     val seenSources = mutable.Set.empty[String]
 
     sortedModuleNames.map { moduleName =>
-      val absoluteSources = dependencyWeightSourcesByModule
-        .get(moduleName)
-        .map(_.absoluteSources)
-        .getOrElse(Set.empty)
-      val deltaSourceCount = absoluteSources.count(source => !seenSources.contains(source))
+      val dependencySources = dependencyWeightSourcesByModule.get(moduleName)
+      val absoluteSources = dependencySources.map(_.absoluteSources).getOrElse(Set.empty)
+      val absoluteSourceLinesBySource = dependencySources
+        .map(_.absoluteSourceLinesBySource)
+        .getOrElse(Map.empty)
+      val deltaSources = absoluteSources.filter(source => !seenSources.contains(source))
       seenSources ++= absoluteSources
 
-      moduleName -> deltaSourceCount
+      moduleName -> DeltaSourceMetrics(
+        sourceCount = deltaSources.size,
+        sourceLineCount = sourceLineCount(deltaSources, absoluteSourceLinesBySource)
+      )
     }.toMap
   }
 
@@ -684,11 +780,79 @@ object StrictDepsAnalyzer {
     )
   }
 
+  private def sourceLinesForDependencyRoots(
+      rootModuleNames: Set[String],
+      dependencyGraph: Map[String, Set[String]],
+      sourceLinesByModule: Map[String, Map[String, Int]]
+  ): Map[String, Int] = {
+    sourceLinesForModules(
+      rootModuleNames.flatMap { moduleName =>
+        dependencyModuleClosure(moduleName, dependencyGraph)
+      },
+      sourceLinesByModule
+    )
+  }
+
   private def sourcesForModules(
       moduleNames: Set[String],
       sourcesByModule: Map[String, Set[String]]
   ): Set[String] = {
     moduleNames.flatMap(moduleName => sourcesByModule.getOrElse(moduleName, Set.empty))
+  }
+
+  private def sourceLinesForModules(
+      moduleNames: Set[String],
+      sourceLinesByModule: Map[String, Map[String, Int]]
+  ): Map[String, Int] = {
+    moduleNames.toSeq
+      .flatMap(moduleName => sourceLinesByModule.getOrElse(moduleName, Map.empty))
+      .groupMapReduce { case (sourceFile, _) => sourceFile } {
+        case (_, lineCount) => lineCount
+      }(_ max _)
+  }
+
+  private def classesForModules(
+      moduleNames: Set[String],
+      classesByModule: Map[String, Set[String]]
+  ): Set[String] = {
+    moduleNames.flatMap(moduleName => classesByModule.getOrElse(moduleName, Set.empty))
+  }
+
+  private def sourceLineCountsForModules(modules: Seq[DependencyModule]): Map[String, Int] = {
+    modules
+      .flatMap(_.sourceLinesBySource)
+      .groupMapReduce { case (sourceFile, _) => sourceFile } {
+        case (_, lineCount) => lineCount
+      }(_ max _)
+  }
+
+  private def sourceLineCounts(sourceFiles: Set[String]): Map[String, Int] = {
+    sourceFiles.toSeq.sorted.map { sourceFile =>
+      sourceFile -> sourceLineCount(sourceFile)
+    }.toMap
+  }
+
+  private def sourceLineCount(
+      sourceFiles: Set[String],
+      sourceLinesBySource: Map[String, Int]
+  ): Int = {
+    sourceFiles.toSeq.map(sourceFile => sourceLinesBySource.getOrElse(sourceFile, 0)).sum
+  }
+
+  private def sourceLineCount(sourceFile: String): Int = {
+    sourcePath(sourceFile)
+      .filter(path => os.exists(path) && os.isFile(path))
+      .map(path => os.read.lines(path).size)
+      .getOrElse(0)
+  }
+
+  private def sourcePath(sourceFile: String): Option[os.Path] = {
+    try {
+      Some(os.Path(sourceFile, os.pwd))
+    } catch {
+      case NonFatal(_) =>
+        None
+    }
   }
 
   private def sourcesForClasses(module: AnalyzedModule, classNames: Set[String]): Seq[String] = {
@@ -744,14 +908,33 @@ object StrictDepsAnalyzer {
   private final case class DependencyModule(
       moduleName: String,
       directDependencyModuleNames: Seq[String],
-      sources: Set[String]
+      sources: Set[String],
+      sourceLinesBySource: Map[String, Int],
+      classes: Set[String]
   )
 
   private final case class DependencyWeightSources(
       moduleName: String,
       ownSources: Set[String],
-      absoluteSources: Set[String]
+      absoluteSources: Set[String],
+      absoluteSourceLinesBySource: Map[String, Int],
+      ownSourceLineCount: Int,
+      absoluteSourceLineCount: Int,
+      ownClassCount: Int,
+      absoluteClassCount: Int
   )
+
+  private final case class DeltaSourceMetrics(
+      sourceCount: Int,
+      sourceLineCount: Int
+  )
+
+  private object DeltaSourceMetrics {
+    val empty: DeltaSourceMetrics = DeltaSourceMetrics(
+      sourceCount = 0,
+      sourceLineCount = 0
+    )
+  }
 
   private final case class CompileDepthData(
       depths: Seq[StrictDepsCompileDepth],
@@ -762,7 +945,9 @@ object StrictDepsAnalyzer {
     DependencyModule(
       moduleName = module.moduleName,
       directDependencyModuleNames = module.directDependencyModuleNames,
-      sources = module.sources
+      sources = module.sources,
+      sourceLinesBySource = sourceLineCounts(module.sources),
+      classes = module.rawClasses
     )
   }
 }

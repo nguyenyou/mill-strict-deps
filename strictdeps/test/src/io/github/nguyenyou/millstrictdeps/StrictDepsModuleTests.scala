@@ -156,11 +156,21 @@ object StrictDepsModuleTests extends TestSuite {
         assert(apiWeight("ownSourceCount").num == 1)
         assert(apiWeight("absoluteSourceCount").num == 2)
         assert(apiWeight("deltaSourceCount").num == 2)
+        assert(apiWeight("ownSourceLineCount").num > 0)
+        assert(apiWeight("absoluteSourceLineCount").num > apiWeight("ownSourceLineCount").num)
+        assert(apiWeight("deltaSourceLineCount").num == apiWeight("absoluteSourceLineCount").num)
+        assert(apiWeight("ownClassCount").num == 1)
+        assert(apiWeight("absoluteClassCount").num == 2)
         assert(apiWeight("deltaKind").str == "remove")
         assert(!domainWeight("declaredDirect").bool)
         assert(domainWeight("ownSourceCount").num == 1)
         assert(domainWeight("absoluteSourceCount").num == 1)
         assert(domainWeight("deltaSourceCount").num == 0)
+        assert(domainWeight("ownSourceLineCount").num > 0)
+        assert(domainWeight("absoluteSourceLineCount").num == domainWeight("ownSourceLineCount").num)
+        assert(domainWeight("deltaSourceLineCount").num == 0)
+        assert(domainWeight("ownClassCount").num == 1)
+        assert(domainWeight("absoluteClassCount").num == 1)
         assert(domainWeight("deltaKind").str == "add")
 
         val fixPlanResult = eval(StrictDepsFixtureBuild.app.strictDepsFixPlan).fold(
@@ -331,10 +341,20 @@ object StrictDepsModuleTests extends TestSuite {
           weightsByModule.view.mapValues(_.compileDepthDeltaSources.millSourceCount).toMap
 
         assert(report.dependencySources.millSourceCount == 5)
+        assert(report.dependencySourceLines.millSourceCount > report.dependencySources.millSourceCount)
+        assert(report.currentModuleClassCount == 2)
+        assert(report.dependencyClassCount == 5)
+        assert(report.totalClassCount == 7)
         assert(deltaSourceCounts == Map("api" -> 2, "helper" -> 2, "server" -> 1, "domain" -> 0))
         assert(deltaSourceCounts.values.sum == report.dependencySources.millSourceCount)
+        assert(weightsByModule("api").ownSourceLines.millSourceCount > 0)
+        assert(weightsByModule("api").absoluteSourceLines.millSourceCount > weightsByModule("api").ownSourceLines.millSourceCount)
+        assert(weightsByModule("api").deltaSourceLines.millSourceCount == weightsByModule("api").absoluteSourceLines.millSourceCount)
+        assert(weightsByModule("api").ownClassCount == 1)
+        assert(weightsByModule("api").absoluteClassCount == 2)
         assert(compileDepthDeltaSourceCounts == Map("api" -> 1, "helper" -> 2, "server" -> 1, "domain" -> 1))
         assert(compileDepthDeltaSourceCounts.values.sum == report.dependencySources.millSourceCount)
+        assert(weightsByModule("api").compileDepthDeltaSourceLines.millSourceCount == weightsByModule("api").ownSourceLines.millSourceCount)
       }
     }
 

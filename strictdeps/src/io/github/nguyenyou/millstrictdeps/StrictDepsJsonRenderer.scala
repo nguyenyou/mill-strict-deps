@@ -68,6 +68,11 @@ object StrictDepsJsonRenderer {
       "ownSourceCount" -> Num(weight.ownSourceCount),
       "absoluteSourceCount" -> Num(weight.absoluteSourceCount),
       "deltaSourceCount" -> Num(weight.deltaSourceCount),
+      "ownSourceLineCount" -> Num(weight.ownSourceLineCount),
+      "absoluteSourceLineCount" -> Num(weight.absoluteSourceLineCount),
+      "deltaSourceLineCount" -> Num(weight.deltaSourceLineCount),
+      "ownClassCount" -> Num(weight.ownClassCount),
+      "absoluteClassCount" -> Num(weight.absoluteClassCount),
       "deltaKind" -> Str(weight.deltaKind),
       "directDependencyModuleNames" -> stringArray(weight.directDependencyModuleNames),
       "transitiveDependencyModuleNames" -> stringArray(weight.transitiveDependencyModuleNames)

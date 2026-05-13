@@ -159,13 +159,23 @@ absolute weight        = dependency module source files
                          + source files from modules reachable from it
 delta weight           = source files from this row's absolute weight
                          that were not already counted by earlier rows
+own lines              = physical source lines in the dependency module itself
+absolute lines         = physical source lines in the dependency module
+                         plus modules reachable from it
+delta lines            = source lines from this row's delta source files
+own classes            = Zinc classes defined by the dependency module itself
+absolute classes       = Zinc classes defined by the dependency module
+                         plus modules reachable from it
 ```
 
 The command calculates every count both ways. If Mill and Zinc agree, it prints
 one number. If they differ, it prints both numbers as `Mill / Zinc` and adds a
-note. Absolute weights can overlap because two dependency modules can share the
-same transitive dependency. Delta weights are ranked-row contributions, so their
-sum is the distinct dependency source count instead of double-counting overlap.
+note. File and line metrics are compared through both Mill planned sources and
+Zinc analysis sources. Class metrics are Zinc-only because Mill's source list
+does not know which classes the compiler produced. Absolute weights can overlap
+because two dependency modules can share the same transitive dependency. Delta
+weights are ranked-row contributions, so their sum is the distinct dependency
+source count instead of double-counting overlap.
 
 For a compile-order view, `strictDepsCompileDepth` prints the same module
 source weights grouped from upstream to downstream:

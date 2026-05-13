@@ -164,7 +164,8 @@ trait StrictDepsModule extends ScalaModule { outer =>
           directDependencyModuleNames = directCompileModules(module)
             .map(_.toString)
             .distinct
-            .sorted
+            .sorted,
+          sourceFiles = sourceFileIds(module.allSourceFiles())
         )
       }
     }()

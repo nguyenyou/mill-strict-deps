@@ -118,9 +118,9 @@ object StrictDepsMarkdownRenderer {
       builder.append("_No dependency module sources recorded by Zinc._\n\n")
     } else {
       builder.append(
-        "| module | relationship | own weight | absolute weight | delta weight | transitive modules | direct deps |\n"
+        "| module | relationship | own weight | absolute weight | delta weight | own lines | absolute lines | delta lines | own classes | absolute classes | transitive modules | direct deps |\n"
       )
-      builder.append("| --- | --- | ---: | ---: | ---: | ---: | --- |\n")
+      builder.append("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |\n")
       weights.foreach { weight =>
         val relationship =
           if (weight.declaredDirect) {
@@ -132,6 +132,8 @@ object StrictDepsMarkdownRenderer {
         builder.append(
           s"| `${escape(weight.moduleName)}` | $relationship | ${weight.ownSourceCount} | " +
             s"${weight.absoluteSourceCount} | ${weight.deltaSourceCount} (${weight.deltaKind}) | " +
+            s"${weight.ownSourceLineCount} | ${weight.absoluteSourceLineCount} | " +
+            s"${weight.deltaSourceLineCount} | ${weight.ownClassCount} | ${weight.absoluteClassCount} | " +
             s"${weight.transitiveDependencyModuleCount} | $directDeps |\n"
         )
       }

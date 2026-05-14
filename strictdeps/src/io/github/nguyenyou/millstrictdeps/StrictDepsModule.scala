@@ -100,6 +100,21 @@ trait StrictDepsModule extends ScalaModule { outer =>
     Result.Success(())
   }
 
+  def strictDepsWhoIntroduces(target: String): Command[Unit] = Task.Command {
+    val report = StrictDepsAnalyzer.whoIntroduces(
+      target = target,
+      directModuleNames = directCompileModules.map(_.toString).toSet,
+      transitiveModules = strictDepsModuleSnapshots()()
+    )
+    Task.log.info(
+      "\n" + StrictDepsWhoIntroducesRenderer.render(
+        moduleName = moduleSegments.render,
+        report = report
+      )
+    )
+    Result.Success(())
+  }
+
   def strictDepsCompileWaste(limit: Int = 50): Command[Unit] = Task.Command {
     val report = analyzeStrictDepsWeight()()
     val snapshot = StrictDepsAnalyzer.compileWasteSnapshot(

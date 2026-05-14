@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.8.0 - 2026-05-15
+
+### Added
+
+- Added `strictDepsWhoIntroduces(target)` command. Given a module name on the command line, prints the shortest transitive chain from each direct compile module dep of the current module to that target. Useful for tracing how an unwanted or unused transitive dep gets pulled in.
+
+### Notes
+
+- Implemented as BFS over the same module dependency graph used by `dependencyModuleClosure`, so the result stays consistent with the rest of the analyzer.
+- One row per introducing direct dep. Direct deps whose closure does not reach the target are silently omitted. If no direct dep introduces it, the command prints a one-liner instead of an empty table.
+
 ## 1.7.0 - 2026-05-15
 
 ### Added

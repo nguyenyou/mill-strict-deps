@@ -330,3 +330,13 @@ final case class StrictDepsModuleReachability(
   def reachableSourceCount: Int = reachableSources.size
   def unusedSourceCount: Int = unusedSources.size
 }
+
+final case class StrictDepsWhoIntroducesReport(
+    target: String,
+    introducers: Seq[StrictDepsIntroducerPath]
+)
+
+final case class StrictDepsIntroducerPath(
+    directModuleName: String,
+    path: Seq[String]
+)

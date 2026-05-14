@@ -992,6 +992,59 @@ object StrictDepsAnalyzer {
     seen.toSet
   }
 
+  def whoIntroduces(
+      target: String,
+      directModuleNames: Set[String],
+      transitiveModules: Seq[StrictDepsModuleSnapshot]
+  ): StrictDepsWhoIntroducesReport = {
+    val graph: Map[String, Set[String]] = transitiveModules
+      .groupMapReduce(_.moduleName)(_.directDependencyModuleNames.toSet)(_ ++ _)
+    val introducers = directModuleNames.toSeq.sorted.flatMap { directName =>
+      shortestPath(directName, target, graph).map { path =>
+        StrictDepsIntroducerPath(directName, path)
+      }
+    }
+    StrictDepsWhoIntroducesReport(target = target, introducers = introducers)
+  }
+
+  private def shortestPath(
+      start: String,
+      target: String,
+      graph: Map[String, Set[String]]
+  ): Option[Seq[String]] = {
+    if (start == target) {
+      Some(Seq(start))
+    } else {
+      val predecessor = mutable.Map.empty[String, String]
+      val visited = mutable.Set(start)
+      val queue = mutable.Queue(start)
+      var found = false
+      while (queue.nonEmpty && !found) {
+        val current = queue.dequeue()
+        graph.getOrElse(current, Set.empty).foreach { neighbor =>
+          if (!visited.contains(neighbor)) {
+            visited += neighbor
+            predecessor(neighbor) = current
+            if (neighbor == target) {
+              found = true
+            } else {
+              queue.enqueue(neighbor)
+            }
+          }
+        }
+      }
+      Option.when(found) {
+        val pathRev = mutable.ArrayBuffer(target)
+        var node = target
+        while (predecessor.contains(node)) {
+          node = predecessor(node)
+          pathRev += node
+        }
+        pathRev.reverse.toSeq
+      }
+    }
+  }
+
   private def dependencyModuleClosure(
       moduleName: String,
       dependencyGraph: Map[String, Set[String]]

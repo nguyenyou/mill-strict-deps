@@ -432,6 +432,18 @@ object StrictDepsModuleTests extends TestSuite {
       }
     }
 
+    test("runs strictDepsWhoIntroduces command") {
+      val resourceFolder = os.Path(sys.env("MILL_TEST_RESOURCE_DIR"))
+      UnitTester(StrictDepsFixtureBuild, resourceFolder / "strict-deps-project").scoped { eval =>
+        eval(StrictDepsFixtureBuild.app.strictDepsWhoIntroduces("domain")) match {
+          case Left(failure) =>
+            throw new Exception(s"Unexpected strictDepsWhoIntroduces failure: $failure")
+          case Right(_) =>
+            ()
+        }
+      }
+    }
+
     test("runs strictDepsCompileWaste command and global aggregation") {
       val resourceFolder = os.Path(sys.env("MILL_TEST_RESOURCE_DIR"))
       UnitTester(StrictDepsFixtureBuild, resourceFolder / "strict-deps-project").scoped { eval =>

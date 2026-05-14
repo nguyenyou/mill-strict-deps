@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mill Strict Deps"
+  short_description: "Use Mill strict-deps plugin effectively"
+  default_prompt: "Use $mill-strict-deps to diagnose a Mill module dependency graph and pick the right strict-deps report."

@@ -5,12 +5,10 @@ object StrictDepsCompileDepthRenderer {
   private val DepthHeader = "depth"
   private val ModuleHeader = "module"
   private val RelationshipHeader = "relationship"
-  private val OwnWeightHeader = "own weight"
-  private val AbsoluteWeightHeader = "absolute weight"
-  private val DeltaWeightHeader = "delta weight"
+  private val OwnSourcesHeader = "own sources"
+  private val AbsoluteSourcesHeader = "absolute sources"
+  private val DeltaSourcesHeader = "delta sources"
   private val OwnLinesHeader = "own lines"
-  private val AbsoluteLinesHeader = "absolute lines"
-  private val DeltaLinesHeader = "delta lines"
   private val OwnClassesHeader = "own classes"
   private val UsedClassesHeader = "used classes"
   private val ReachableClassesHeader = "reachable classes"
@@ -19,6 +17,9 @@ object StrictDepsCompileDepthRenderer {
   private val SourceCountHeader = "count"
   private val NoteHeader = "note"
   private val TargetRelationship = "target"
+  private val BarWidth = 10
+  private val BarFilled = "█"
+  private val BarEmpty = "░"
 
   def render(
       moduleName: String,
@@ -47,17 +48,15 @@ object StrictDepsCompileDepthRenderer {
       layout = layout,
       depthValue = DepthHeader,
       moduleValue = ModuleHeader,
-      relationshipValue = RelationshipHeader,
-      ownValue = OwnWeightHeader,
-      absoluteValue = AbsoluteWeightHeader,
-      deltaValue = DeltaWeightHeader,
+      relationshipValue = fansi.Str(RelationshipHeader),
+      ownValue = OwnSourcesHeader,
+      absoluteValue = AbsoluteSourcesHeader,
+      deltaValue = DeltaSourcesHeader,
       ownLinesValue = OwnLinesHeader,
-      absoluteLinesValue = AbsoluteLinesHeader,
-      deltaLinesValue = DeltaLinesHeader,
       ownClassesValue = OwnClassesHeader,
-      usedClassesValue = UsedClassesHeader,
-      reachableClassesValue = ReachableClassesHeader,
-      reachableSourcesValue = ReachableSourcesHeader,
+      usedClassesValue = fansi.Str(UsedClassesHeader),
+      reachableClassesValue = fansi.Str(ReachableClassesHeader),
+      reachableSourcesValue = fansi.Str(ReachableSourcesHeader),
       absoluteClassesValue = AbsoluteClassesHeader,
       noteValue = Option.when(layout.showNotes)(NoteHeader).getOrElse("")
     )
@@ -81,8 +80,6 @@ object StrictDepsCompileDepthRenderer {
         absoluteValue = row.absoluteWeight,
         deltaValue = row.deltaWeight,
         ownLinesValue = row.ownLines,
-        absoluteLinesValue = row.absoluteLines,
-        deltaLinesValue = row.deltaLines,
         ownClassesValue = row.ownClasses,
         usedClassesValue = row.usedClasses,
         reachableClassesValue = row.reachableClasses,
@@ -98,17 +95,15 @@ object StrictDepsCompileDepthRenderer {
         layout = layout,
         depthValue = moduleCountLabel(depth.modules.size),
         moduleValue = "",
-        relationshipValue = "",
+        relationshipValue = fansi.Str(""),
         ownValue = "",
         absoluteValue = "",
         deltaValue = "",
         ownLinesValue = "",
-        absoluteLinesValue = "",
-        deltaLinesValue = "",
         ownClassesValue = "",
-        usedClassesValue = "",
-        reachableClassesValue = "",
-        reachableSourcesValue = "",
+        usedClassesValue = fansi.Str(""),
+        reachableClassesValue = fansi.Str(""),
+        reachableSourcesValue = fansi.Str(""),
         absoluteClassesValue = "",
         noteValue = ""
       )
@@ -138,12 +133,10 @@ object StrictDepsCompileDepthRenderer {
     val targetAbsoluteValue = formatComparison(report.totalSources)
     val targetDeltaValue = formatComparison(report.currentModuleSources)
     val targetOwnLinesValue = formatComparison(report.currentModuleSourceLines)
-    val targetAbsoluteLinesValue = formatComparison(report.totalSourceLines)
-    val targetDeltaLinesValue = formatComparison(report.currentModuleSourceLines)
     val targetOwnClassesValue = report.currentModuleClassCount.toString
-    val targetUsedClassesValue = ""
-    val targetReachableClassesValue = ""
-    val targetReachableSourcesValue = ""
+    val targetUsedClassesValue = fansi.Str("")
+    val targetReachableClassesValue = fansi.Str("")
+    val targetReachableSourcesValue = fansi.Str("")
     val targetAbsoluteClassesValue = report.totalClassCount.toString
     val targetNoteValue = targetNote(report)
     val rows = weights.map(renderedRow)
@@ -157,24 +150,28 @@ object StrictDepsCompileDepthRenderer {
       moduleWidth = maxWidth(
         ModuleHeader +: (weights.map(weight => display(weight.moduleName)) :+ display(moduleName))
       ),
-      relationshipWidth = maxWidth(RelationshipHeader +: (weights.map(relationship) :+ TargetRelationship)),
-      ownWeightWidth = maxWidth(OwnWeightHeader +: (rows.map(_.ownWeight) :+ targetOwnValue)),
+      relationshipWidth = fansiMaxWidth(
+        RelationshipHeader,
+        weights.map(relationship) :+ fansi.Str(TargetRelationship)
+      ),
+      ownWeightWidth = maxWidth(OwnSourcesHeader +: (rows.map(_.ownWeight) :+ targetOwnValue)),
       absoluteWeightWidth = maxWidth(
-        AbsoluteWeightHeader +: (rows.map(_.absoluteWeight) :+ targetAbsoluteValue)
+        AbsoluteSourcesHeader +: (rows.map(_.absoluteWeight) :+ targetAbsoluteValue)
       ),
-      deltaWeightWidth = maxWidth(DeltaWeightHeader +: (rows.map(_.deltaWeight) :+ targetDeltaValue)),
+      deltaWeightWidth = maxWidth(DeltaSourcesHeader +: (rows.map(_.deltaWeight) :+ targetDeltaValue)),
       ownLinesWidth = maxWidth(OwnLinesHeader +: (rows.map(_.ownLines) :+ targetOwnLinesValue)),
-      absoluteLinesWidth = maxWidth(
-        AbsoluteLinesHeader +: (rows.map(_.absoluteLines) :+ targetAbsoluteLinesValue)
-      ),
-      deltaLinesWidth = maxWidth(DeltaLinesHeader +: (rows.map(_.deltaLines) :+ targetDeltaLinesValue)),
       ownClassesWidth = maxWidth(OwnClassesHeader +: (rows.map(_.ownClasses) :+ targetOwnClassesValue)),
-      usedClassesWidth = maxWidth(UsedClassesHeader +: (rows.map(_.usedClasses) :+ targetUsedClassesValue)),
-      reachableClassesWidth = maxWidth(
-        ReachableClassesHeader +: (rows.map(_.reachableClasses) :+ targetReachableClassesValue)
+      usedClassesWidth = fansiMaxWidth(
+        UsedClassesHeader,
+        rows.map(_.usedClasses) :+ targetUsedClassesValue
       ),
-      reachableSourcesWidth = maxWidth(
-        ReachableSourcesHeader +: (rows.map(_.reachableSources) :+ targetReachableSourcesValue)
+      reachableClassesWidth = fansiMaxWidth(
+        ReachableClassesHeader,
+        rows.map(_.reachableClasses) :+ targetReachableClassesValue
+      ),
+      reachableSourcesWidth = fansiMaxWidth(
+        ReachableSourcesHeader,
+        rows.map(_.reachableSources) :+ targetReachableSourcesValue
       ),
       absoluteClassesWidth = maxWidth(
         AbsoluteClassesHeader +: (rows.map(_.absoluteClasses) :+ targetAbsoluteClassesValue)
@@ -194,12 +191,10 @@ object StrictDepsCompileDepthRenderer {
     val totalValue = formatComparison(report.totalSources)
     val deltaValue = formatComparison(report.currentModuleSources)
     val ownLinesValue = formatComparison(report.currentModuleSourceLines)
-    val totalLinesValue = formatComparison(report.totalSourceLines)
-    val deltaLinesValue = formatComparison(report.currentModuleSourceLines)
     val ownClassesValue = report.currentModuleClassCount.toString
-    val usedClassesValue = ""
-    val reachableClassesValue = ""
-    val reachableSourcesValue = ""
+    val usedClassesValue = fansi.Str("")
+    val reachableClassesValue = fansi.Str("")
+    val reachableSourcesValue = fansi.Str("")
     val totalClassesValue = report.totalClassCount.toString
     val note = targetNote(report)
 
@@ -208,13 +203,11 @@ object StrictDepsCompileDepthRenderer {
       layout = layout,
       depthValue = "target",
       moduleValue = display(moduleName),
-      relationshipValue = TargetRelationship,
+      relationshipValue = fansi.Str(TargetRelationship),
       ownValue = ownValue,
       absoluteValue = totalValue,
       deltaValue = deltaValue,
       ownLinesValue = ownLinesValue,
-      absoluteLinesValue = totalLinesValue,
-      deltaLinesValue = deltaLinesValue,
       ownClassesValue = ownClassesValue,
       usedClassesValue = usedClassesValue,
       reachableClassesValue = reachableClassesValue,
@@ -227,17 +220,15 @@ object StrictDepsCompileDepthRenderer {
       layout = layout,
       depthValue = s"depth ${report.targetDepthIndex}",
       moduleValue = "",
-      relationshipValue = "",
+      relationshipValue = fansi.Str(""),
       ownValue = "",
       absoluteValue = "",
       deltaValue = "",
       ownLinesValue = "",
-      absoluteLinesValue = "",
-      deltaLinesValue = "",
       ownClassesValue = "",
-      usedClassesValue = "",
-      reachableClassesValue = "",
-      reachableSourcesValue = "",
+      usedClassesValue = fansi.Str(""),
+      reachableClassesValue = fansi.Str(""),
+      reachableSourcesValue = fansi.Str(""),
       absoluteClassesValue = "",
       noteValue = ""
     )
@@ -248,17 +239,15 @@ object StrictDepsCompileDepthRenderer {
       layout: DepthLayout,
       depthValue: String,
       moduleValue: String,
-      relationshipValue: String,
+      relationshipValue: fansi.Str,
       ownValue: String,
       absoluteValue: String,
       deltaValue: String,
       ownLinesValue: String,
-      absoluteLinesValue: String,
-      deltaLinesValue: String,
       ownClassesValue: String,
-      usedClassesValue: String,
-      reachableClassesValue: String,
-      reachableSourcesValue: String,
+      usedClassesValue: fansi.Str,
+      reachableClassesValue: fansi.Str,
+      reachableSourcesValue: fansi.Str,
       absoluteClassesValue: String,
       noteValue: String
   ): Unit = {
@@ -267,7 +256,7 @@ object StrictDepsCompileDepthRenderer {
     row.append("  ")
     row.append(padRight(moduleValue, layout.moduleWidth))
     row.append("  ")
-    row.append(padRight(relationshipValue, layout.relationshipWidth))
+    row.append(padRightFansi(relationshipValue, layout.relationshipWidth))
     row.append("  ")
     row.append(padLeft(ownValue, layout.ownWeightWidth))
     row.append("  ")
@@ -277,17 +266,13 @@ object StrictDepsCompileDepthRenderer {
     row.append("  ")
     row.append(padLeft(ownLinesValue, layout.ownLinesWidth))
     row.append("  ")
-    row.append(padLeft(absoluteLinesValue, layout.absoluteLinesWidth))
-    row.append("  ")
-    row.append(padLeft(deltaLinesValue, layout.deltaLinesWidth))
-    row.append("  ")
     row.append(padLeft(ownClassesValue, layout.ownClassesWidth))
     row.append("  ")
-    row.append(padLeft(usedClassesValue, layout.usedClassesWidth))
+    row.append(padLeftFansi(usedClassesValue, layout.usedClassesWidth))
     row.append("  ")
-    row.append(padLeft(reachableClassesValue, layout.reachableClassesWidth))
+    row.append(padLeftFansi(reachableClassesValue, layout.reachableClassesWidth))
     row.append("  ")
-    row.append(padLeft(reachableSourcesValue, layout.reachableSourcesWidth))
+    row.append(padLeftFansi(reachableSourcesValue, layout.reachableSourcesWidth))
     row.append("  ")
     row.append(padLeft(absoluteClassesValue, layout.absoluteClassesWidth))
     if (layout.showNotes) {
@@ -416,8 +401,6 @@ object StrictDepsCompileDepthRenderer {
       absoluteWeight = formatComparison(weight.absoluteSources),
       deltaWeight = formatComparison(weight.compileDepthDeltaSources),
       ownLines = formatComparison(weight.ownSourceLines),
-      absoluteLines = formatComparison(weight.absoluteSourceLines),
-      deltaLines = formatComparison(weight.compileDepthDeltaSourceLines),
       ownClasses = weight.ownClassCount.toString,
       usedClasses = usedClasses(weight),
       reachableClasses = reachableClasses(weight),
@@ -427,28 +410,36 @@ object StrictDepsCompileDepthRenderer {
     )
   }
 
-  private def usedClasses(weight: StrictDepsModuleWeightComparison): String = {
-    if (weight.usedClassCount == 0) {
-      "zero"
-    } else {
-      s"${weight.usedClassCount} / ${weight.usedClassTotalCount} (${formatPercent(weight.usedClassPercent)})"
-    }
+  private def usedClasses(weight: StrictDepsModuleWeightComparison): fansi.Str = {
+    countAndBar(weight.usedClassCount, weight.usedClassTotalCount, weight.usedClassPercent)
   }
 
-  private def reachableClasses(weight: StrictDepsModuleWeightComparison): String = {
-    if (weight.reachableClassCount == 0) {
-      "zero"
-    } else {
-      s"${weight.reachableClassCount} / ${weight.reachableClassTotalCount} (${formatPercent(weight.reachableClassPercent)})"
-    }
+  private def reachableClasses(weight: StrictDepsModuleWeightComparison): fansi.Str = {
+    countAndBar(weight.reachableClassCount, weight.reachableClassTotalCount, weight.reachableClassPercent)
   }
 
-  private def reachableSources(weight: StrictDepsModuleWeightComparison): String = {
-    if (weight.reachableSourceCount == 0) {
-      "zero"
-    } else {
-      s"${weight.reachableSourceCount} / ${weight.reachableSourceTotalCount} (${formatPercent(weight.reachableSourcePercent)})"
-    }
+  private def reachableSources(weight: StrictDepsModuleWeightComparison): fansi.Str = {
+    countAndBar(weight.reachableSourceCount, weight.reachableSourceTotalCount, weight.reachableSourcePercent)
+  }
+
+  private def countAndBar(count: Int, total: Int, percent: Double): fansi.Str = {
+    val countText = s"$count / $total "
+    val prefix = if (count == 0) fansi.Color.Red(countText) else fansi.Str(countText)
+    prefix ++ progressBar(percent)
+  }
+
+  private def progressBar(percent: Double): fansi.Str = {
+    val p = math.max(0.0, math.min(1.0, percent / 100.0))
+    val filled = math.round(BarWidth * p).toInt
+    val bar = (BarFilled * filled) + (BarEmpty * (BarWidth - filled))
+    percentAttrs(percent)(bar)
+  }
+
+  private def percentAttrs(percent: Double): fansi.Attrs = {
+    val p = math.max(0.0, math.min(1.0, percent / 100.0))
+    val r = math.min(1.0, 2.0 * (1.0 - p))
+    val g = math.min(1.0, 2.0 * p)
+    fansi.Color.True((r * 255).toInt, (g * 255).toInt, 0)
   }
 
   private def appendComparisonNote(
@@ -467,9 +458,7 @@ object StrictDepsCompileDepthRenderer {
         weight.ownSources,
         weight.absoluteSources,
         weight.compileDepthDeltaSources,
-        weight.ownSourceLines,
-        weight.absoluteSourceLines,
-        weight.compileDepthDeltaSourceLines
+        weight.ownSourceLines
       )
     }
 
@@ -481,11 +470,11 @@ object StrictDepsCompileDepthRenderer {
     }
   }
 
-  private def relationship(weight: StrictDepsModuleWeightComparison): String = {
+  private def relationship(weight: StrictDepsModuleWeightComparison): fansi.Str = {
     if (weight.declaredDirect) {
-      "direct"
+      fansi.Color.Green("█") ++ fansi.Str(" direct")
     } else {
-      "transitive"
+      fansi.Color.Blue("█") ++ fansi.Str(" transitive")
     }
   }
 
@@ -515,12 +504,10 @@ object StrictDepsCompileDepthRenderer {
 
   private def rowNote(weight: StrictDepsModuleWeightComparison): String = {
     Seq(
-      "own weight" -> weight.ownSources,
-      "absolute weight" -> weight.absoluteSources,
-      "delta weight" -> weight.compileDepthDeltaSources,
-      "own lines" -> weight.ownSourceLines,
-      "absolute lines" -> weight.absoluteSourceLines,
-      "delta lines" -> weight.compileDepthDeltaSourceLines
+      "own sources" -> weight.ownSources,
+      "absolute sources" -> weight.absoluteSources,
+      "delta sources" -> weight.compileDepthDeltaSources,
+      "own lines" -> weight.ownSourceLines
     ).flatMap { case (label, comparison) =>
       Option.when(!comparison.matches) {
         s"$label Mill-Zinc ${formatSigned(comparison.millSourceCount - comparison.zincSourceCount)}"
@@ -530,8 +517,8 @@ object StrictDepsCompileDepthRenderer {
 
   private def targetNote(report: StrictDepsWeightReport): String = {
     Seq(
-      "own weight" -> report.currentModuleSources,
-      "total weight" -> report.totalSources,
+      "own sources" -> report.currentModuleSources,
+      "total sources" -> report.totalSources,
       "own lines" -> report.currentModuleSourceLines,
       "total lines" -> report.totalSourceLines
     ).flatMap { case (label, comparison) =>
@@ -557,6 +544,10 @@ object StrictDepsCompileDepthRenderer {
     values.map(_.length).max
   }
 
+  private def fansiMaxWidth(header: String, values: Seq[fansi.Str]): Int = {
+    (header.length +: values.map(_.length)).max
+  }
+
   private def padRight(value: String, width: Int): String = {
     value + (" " * (width - value.length))
   }
@@ -567,6 +558,14 @@ object StrictDepsCompileDepthRenderer {
 
   private def trimRight(value: String): String = {
     value.reverse.dropWhile(_.isWhitespace).reverse
+  }
+
+  private def padLeftFansi(value: fansi.Str, width: Int): String = {
+    (" " * math.max(0, width - value.length)) + value.render
+  }
+
+  private def padRightFansi(value: fansi.Str, width: Int): String = {
+    value.render + (" " * math.max(0, width - value.length))
   }
 
   private def display(value: String): String = {
@@ -583,8 +582,6 @@ object StrictDepsCompileDepthRenderer {
       absoluteWeightWidth: Int,
       deltaWeightWidth: Int,
       ownLinesWidth: Int,
-      absoluteLinesWidth: Int,
-      deltaLinesWidth: Int,
       ownClassesWidth: Int,
       usedClassesWidth: Int,
       reachableClassesWidth: Int,
@@ -601,8 +598,6 @@ object StrictDepsCompileDepthRenderer {
         2 + absoluteWeightWidth +
         2 + deltaWeightWidth +
         2 + ownLinesWidth +
-        2 + absoluteLinesWidth +
-        2 + deltaLinesWidth +
         2 + ownClassesWidth +
         2 + usedClassesWidth +
         2 + reachableClassesWidth +
@@ -620,17 +615,15 @@ object StrictDepsCompileDepthRenderer {
 
   private final case class RenderedDepthRow(
       moduleName: String,
-      relationship: String,
+      relationship: fansi.Str,
       ownWeight: String,
       absoluteWeight: String,
       deltaWeight: String,
       ownLines: String,
-      absoluteLines: String,
-      deltaLines: String,
       ownClasses: String,
-      usedClasses: String,
-      reachableClasses: String,
-      reachableSources: String,
+      usedClasses: fansi.Str,
+      reachableClasses: fansi.Str,
+      reachableSources: fansi.Str,
       absoluteClasses: String,
       note: String
   )

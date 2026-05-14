@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.7.0 - 2026-05-15
+
+### Added
+
+- Added color progress bars to `used classes`, `reachable classes`, and `reachable sources` cells in `strictDepsCompileDepth`. Bar color interpolates red (0%) through yellow (50%) to green (100%) via the `fansi` library.
+- Added a colored block prefix to the `relationship` column: green block for `direct`, blue block for `transitive`.
+
+### Changed
+
+- Renamed `strictDepsCompileDepth` headers `own weight` / `absolute weight` / `delta weight` to `own sources` / `absolute sources` / `delta sources`. Mill/Zinc divergence note labels follow the rename.
+- Zero-coverage cells now show `0 / N` with an all-red bar instead of the literal text `zero`, matching the format of non-zero rows.
+
+### Removed
+
+- Removed `absolute lines` and `delta lines` columns from `strictDepsCompileDepth`. The `own lines` column stays.
+
+### Notes
+
+- The gradient uses 24-bit ANSI (`fansi.Color.True(r, g, b)`). Modern terminals render it natively; older or non-color terminals will see the escape codes but the underlying counts remain readable.
+- Column widths stay correctly aligned because the renderer pads on visible-width (`fansi.Str.length`) and only renders ANSI bytes at the very end.
+
 ## 1.6.0 - 2026-05-13
 
 ### Added

@@ -1,6 +1,6 @@
 ---
 name: mill-strict-deps
-description: "Use when working with the mill-strict-deps Mill plugin in Scala/JVM or Java/JVM Mill builds: installing the plugin, mixing `StrictDepsModule` into modules, running strict dependency reports, interpreting unused direct deps, missing direct deps, dependency weight, compile depth, compile waste, classpath reachability, who-introduces transitive dependency chains, JSON output, fix plans, checks, graph snapshots, and whole-build global commands."
+description: "Use when working with the mill-strict-deps Mill plugin in Scala/JVM or Java/JVM Mill builds: installing the plugin, mixing `StrictDepsModule` into modules, running strict dependency reports, interpreting unused direct deps, missing direct deps, dependency weight, compile depth, compile waste, classpath reachability, who-introduces transitive dependency chains, JSON output, fix plans, autofix plans, checks, graph snapshots, and whole-build global commands."
 ---
 
 # Mill Strict Deps
@@ -15,7 +15,7 @@ The plugin asks one simple question:
 declared direct internal deps
         |
         v
-classes Zinc says this module used
+classes Zinc says this module referenced
         |
         v
 unused direct deps + missing direct deps + compile-cost clues
@@ -59,6 +59,15 @@ Need exact machine-readable facts?
 Want suggested edits, but no mutation?
   ./mill appA.strictDepsFixPlan
 
+Want an apply-ready safe edit plan?
+  ./mill appA.strictDepsAutofixPlan
+
+Want to preview the exact automatic edit?
+  ./mill appA.strictDepsApplyFix --dryRun true
+
+Want to apply safe direct-dep edits to build.mill?
+  ./mill appA.strictDepsApplyFix
+
 Want CI to fail on dependency shape?
   ./mill appA.strictDepsCheck
 
@@ -97,6 +106,15 @@ When chaining Mill tasks, separate top-level tasks with `+`:
 
 `strictDepsFixPlan`
 : Write `out/<module>/strictDepsFixPlan.dest/strict-deps-fix-plan.md`. Suggests direct deps to add and remove. It never edits `build.mill`.
+
+`strictDepsAutofixPlan`
+: Write `out/<module>/strictDepsAutofixPlan.dest/strict-deps-autofix-plan.md`. Builds an apply-ready plan for adding missing direct deps and removing unused direct deps from the module's source file, but does not mutate files.
+
+`strictDepsApplyFix --dryRun true`
+: Print the same autofix plan as a command dry run. No files are changed.
+
+`strictDepsApplyFix`
+: Apply the autofix plan to the module's source file. It edits only supported `moduleDeps` / `compileModuleDeps` shapes such as `Seq(...)`, `Seq.empty`, `Nil`, `super.moduleDeps ++ Seq(...)`, and `Seq(...) ++ super.moduleDeps`. It refuses the whole apply when any planned add/remove is unsafe, including dynamic dependency expressions, cross module expressions that cannot be synthesized safely, or removals whose exact expression cannot be matched.
 
 `strictDepsCheck`
 : Fail when unused direct deps or missing direct deps exist, subject to the module settings below. Use for CI once false positives are understood.
@@ -152,7 +170,7 @@ strict shape:
 ```
 
 `used direct module deps`
-: Direct internal deps whose classes Zinc saw the current module use.
+: Direct internal deps whose classes Zinc saw the current module reference.
 
 `unused direct module deps`
 : Direct internal deps where Zinc recorded no compile-time class use. Often removable, but watch for resources, reflection, generated code, macros, annotation processors, framework conventions, or runtime-only edges.
@@ -218,12 +236,13 @@ object appA extends ScalaModule with StrictDepsModule {
 
 1. Run `strictDepsJsonReport` for exact facts.
 2. Read `strictDepsFixPlan` for the direct add/remove proposal.
-3. Use `strictDepsWeight` if a removal could save a lot of compile input.
-4. Use `strictDepsCompileWaste` when a dependency is real but suspiciously fat.
-5. Use `strictDepsCompileDepth` when compile order or upstream layering matters.
-6. Use `strictDepsWhoIntroduces --target targetModule` when an unwanted transitive module needs a direct-edge explanation.
-7. Use global `strictDepsCommonAncestors` to find modules upstream of almost everything.
-8. Use global `strictDepsCompileWaste` to find repeated waste across clients.
-9. Edit `build.mill` manually and rerun the same report/check.
+3. Run `strictDepsAutofixPlan` or `strictDepsApplyFix --dryRun true` when the proposal should be applied mechanically.
+4. Run `strictDepsApplyFix` only after reviewing the plan. Rerun the same report/check after applying.
+5. Use `strictDepsWeight` if a removal could save a lot of compile input.
+6. Use `strictDepsCompileWaste` when a dependency is real but suspiciously fat.
+7. Use `strictDepsCompileDepth` when compile order or upstream layering matters.
+8. Use `strictDepsWhoIntroduces --target targetModule` when an unwanted transitive module needs a direct-edge explanation.
+9. Use global `strictDepsCommonAncestors` to find modules upstream of almost everything.
+10. Use global `strictDepsCompileWaste` to find repeated waste across clients.
 
-Do not treat the fix plan as a command script. It is a receipt: it tells which boxes to add or remove, but the agent still has to edit the Mill build intentionally and rerun validation.
+Do not treat `strictDepsFixPlan` as a command script. It is a receipt. Use `strictDepsAutofixPlan` or `strictDepsApplyFix --dryRun true` when you need an apply-ready plan, then verify with the same report/check after mutation.

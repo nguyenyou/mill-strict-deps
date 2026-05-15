@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased
+## 1.9.0 - 2026-05-15
+
+### Added
+
+- Added `strictDepsAutofixPlan`, which writes an apply-ready Markdown plan for
+  adding missing direct deps and removing unused direct deps without mutating
+  `build.mill`.
+- Added `strictDepsApplyFix(dryRun)`, an all-or-nothing command that previews or
+  applies safe `moduleDeps` / `compileModuleDeps` edits only when every change
+  maps to an exact supported source edit.
+- Added a conservative autofix planner and renderer for supported dependency
+  shapes: `Seq(...)`, `Seq.empty`, `Nil`, `super.moduleDeps ++ Seq(...)`, and
+  `Seq(...) ++ super.moduleDeps`.
+- Added autofix tests covering simple add/remove edits, multiline sequences,
+  inserted dependency methods, compile-only additions, dynamic-shape refusals,
+  and cross-module refusal cases.
 
 ### Changed
 
@@ -8,6 +23,16 @@
   and `Dependency Usage Weight` to `Dependency Reference Weight` in reports and
   terminal tables, to make it clear that this is Zinc's direct source-reference
   count and not classpath reachability.
+- Documented the autofix workflow in the README and bundled agent skill docs.
+
+### Notes
+
+- Autofix currently supports explicit `Seq(...)`, `Seq.empty`, `Nil`, and
+  `super.<deps> ++ Seq(...)` dependency definitions. It refuses dynamic source
+  shapes, cross modules, ambiguous removals, and any plan that would require a
+  guess.
+- The JSON schema remains version `4`; this release changes human-facing labels
+  but keeps existing JSON field names stable.
 
 ## 1.8.1 - 2026-05-15
 

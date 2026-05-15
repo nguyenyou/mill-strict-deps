@@ -215,6 +215,24 @@ object StrictDepsModuleTests extends TestSuite {
         assert(fixPlan.contains("Remove `server`"))
         assert(fixPlan.contains("absolute weight: 1 source, delta weight: 1 source remove"))
         assert(fixPlan.contains("does not mutate `build.mill`"))
+
+        val autofixPlanResult = eval(StrictDepsFixtureBuild.app.strictDepsAutofixPlan).fold(
+          failure => throw new Exception(failure.toString),
+          identity
+        )
+        val autofixPlan = os.read(autofixPlanResult.value.path)
+
+        assert(autofixPlan.contains("add `domain` in `moduleDeps` as `domain`"))
+        assert(autofixPlan.contains("remove `server` in `moduleDeps`"))
+        assert(autofixPlan.contains("## Refused"))
+        assert(autofixPlan.contains("_None._"))
+
+        eval(StrictDepsFixtureBuild.app.strictDepsApplyFix(dryRun = true)) match {
+          case Left(failure) =>
+            throw new Exception(s"Unexpected strictDepsApplyFix dry run failure: $failure")
+          case Right(_) =>
+            ()
+        }
       }
     }
 

@@ -298,7 +298,7 @@ modules are actually wasting compile input for clients.
 
 ```scala
 //| mvnDeps:
-//| - io.github.nguyenyou::mill-strict-deps::1.5.0
+//| - io.github.nguyenyou::mill-strict-deps::1.9.0
 ```
 
 The `::version` shorthand appends `_mill$MILL_BIN_PLATFORM`, so on Mill 1.x it
@@ -321,6 +321,9 @@ object appA extends ScalaModule with StrictDepsModule {
 ./mill appA.strictDepsReport
 ./mill appA.strictDepsJsonReport
 ./mill appA.strictDepsFixPlan
+./mill appA.strictDepsAutofixPlan
+./mill appA.strictDepsApplyFix --dryRun true
+./mill appA.strictDepsApplyFix
 ./mill appA.strictDepsWeight
 ./mill appA.strictDepsCompileDepth
 ./mill appA.strictDepsCompileWaste
@@ -339,6 +342,7 @@ Outputs:
 out/appA/strictDepsReport.dest/strict-deps-report.md
 out/appA/strictDepsJsonReport.dest/strict-deps-report.json
 out/appA/strictDepsFixPlan.dest/strict-deps-fix-plan.md
+out/appA/strictDepsAutofixPlan.dest/strict-deps-autofix-plan.md
 ```
 
 `strictDepsJsonReport` is the comprehensive machine-readable report. It keeps
@@ -354,6 +358,21 @@ the strict-deps facts used by the Markdown report and also includes:
 `strictDepsCheck` fails when the module has unused direct module deps or missing
 direct module deps, depending on the module settings.
 
+`strictDepsAutofixPlan` writes the exact source edit plan that
+`strictDepsApplyFix` would attempt. `strictDepsApplyFix --dryRun true` prints the
+same plan without changing files. `strictDepsApplyFix` edits the module source
+file only when every requested change is safe. If any add or remove cannot be
+located exactly, the command fails without writing the file.
+
+The autofix is deliberately narrow. It edits only the source file and module
+line recorded by Mill for the current module. It supports explicit `moduleDeps`
+and `compileModuleDeps` definitions whose right-hand side is `Seq(...)`,
+`Seq.empty`, `Nil`, `super.moduleDeps ++ Seq(...)`, or
+`Seq(...) ++ super.moduleDeps` (and the matching `compileModuleDeps` forms). It
+can insert a missing dependency method for additions. It refuses computed deps,
+cross modules, ambiguous removals, and any source shape where the plugin would
+have to guess.
+
 <details>
 <summary>How To Read The Report Numbers</summary>
 
@@ -366,8 +385,8 @@ Think of one report as a receipt for one module:
 ```text
 module under test: appA
 
-declared direct boxes:  appB, uiWidget, logging
-classes actually used:  uiWidget.Button, logging.Logger, theme.Color
+declared direct boxes:       appB, uiWidget, logging
+classes directly referenced: uiWidget.Button, logging.Logger, theme.Color
 ```
 
 The report asks four questions:
@@ -446,13 +465,15 @@ Implemented:
 - Markdown report.
 - JSON fact report.
 - Suggested fix plan that does not mutate `build.mill`.
+- Safe all-or-nothing autofix for explicit `moduleDeps` and
+  `compileModuleDeps` `Seq(...)` shapes.
 - Check mode that fails on unused or missing direct module deps.
 
 Planned:
 
 - External Maven dependency reporting, later.
 - Suppressions with reasons.
-- Safe `build.mill` editing after fix plans are trustworthy.
+- Broader Scala source-shape support for safe autofix.
 - CI-friendly baselines.
 - Better diagnostics for resource-only, reflection, macro, and annotation
   processor cases.
@@ -557,7 +578,7 @@ Markdown report, JSON facts, fix plan, or failing check
 | `--direct_dependencies` from the Java compile action | `moduleDeps` and `compileModuleDeps` declared on the Mill module |
 | `.jdeps` proto containing compile-time jar usage | `strictDepsJsonReport` generated from Zinc analysis |
 | strict-deps compiler plugin detects indirect jars during javac | analyzer detects used transitive modules from Zinc relations |
-| `unused_deps` emits Buildozer commands | `strictDepsFixPlan` emits suggested `build.mill` edits |
+| `unused_deps` emits Buildozer commands | `strictDepsFixPlan` emits suggested edits; `strictDepsApplyFix` applies safe supported edits |
 
 The implementation copies Bazel's architecture, not its Java-specific compiler
 plugin:
@@ -566,7 +587,7 @@ plugin:
 detect facts first
 report facts second
 suggest edits third
-mutate build files only after the suggestions are trustworthy
+mutate build files only after the autofix plan is trustworthy
 ```
 
 </details>

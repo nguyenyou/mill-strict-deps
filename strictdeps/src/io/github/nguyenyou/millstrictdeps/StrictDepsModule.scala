@@ -1,9 +1,12 @@
 package io.github.nguyenyou.millstrictdeps
 
 import mill.*
+import mill.api.BuildCtx
 import mill.api.Result
 import mill.javalib.JavaModule
 import mill.scalalib.ScalaModule
+
+import java.nio.file.Paths
 
 trait StrictDepsModule extends ScalaModule { outer =>
 
@@ -76,6 +79,43 @@ trait StrictDepsModule extends ScalaModule { outer =>
     )
     Task.log.info(s"strictDepsFixPlan -> $out")
     PathRef(out)
+  }
+
+  def strictDepsAutofixPlan: T[PathRef] = Task {
+    val report = analyzeStrictDeps()()
+    val input = strictDepsAutofixInput(report)
+    val out = Task.dest / "strict-deps-autofix-plan.md"
+    if (!os.exists(input.sourceFile)) {
+      Result.Failure(s"Module source file does not exist: ${input.sourceFile}")
+    } else {
+      val plan = StrictDepsAutofix.plan(input, os.read(input.sourceFile))
+      os.write.over(out, StrictDepsAutofixRenderer.render(plan, dryRun = true))
+      Task.log.info(s"strictDepsAutofixPlan -> $out")
+      Result.Success(PathRef(out))
+    }
+  }
+
+  def strictDepsApplyFix(dryRun: Boolean = false): Command[Unit] = Task.Command(globalExclusive = true) {
+    val report = analyzeStrictDeps()()
+    val input = strictDepsAutofixInput(report)
+    if (!os.exists(input.sourceFile)) {
+      Result.Failure(s"Module source file does not exist: ${input.sourceFile}")
+    } else {
+      val source = os.read(input.sourceFile)
+      val plan = StrictDepsAutofix.plan(input, source)
+      Task.log.info("\n" + StrictDepsAutofixRenderer.render(plan, dryRun = dryRun))
+      if (!plan.canApply) {
+        Result.Failure(
+          "strictDepsApplyFix refused to edit because at least one required change was unsafe"
+        )
+      } else if (dryRun || !plan.hasChanges) {
+        Result.Success(())
+      } else {
+        os.write.over(input.sourceFile, plan.applyTo(source))
+        Task.log.info(s"strictDepsApplyFix updated ${input.sourceFile}")
+        Result.Success(())
+      }
+    }
   }
 
   def strictDepsWeight(): Command[Unit] = Task.Command {
@@ -250,6 +290,40 @@ trait StrictDepsModule extends ScalaModule { outer =>
 
   private def directCompileModules(module: JavaModule): Seq[JavaModule] = {
     (module.moduleDepsChecked ++ module.compileModuleDepsChecked).distinct
+  }
+
+  private def strictDepsAutofixInput(report: StrictDepsReport): StrictDepsAutofix.Input = {
+    val normalDirectDeps = outer.moduleDepsChecked.distinct
+    val compileDirectDeps = outer.compileModuleDepsChecked.distinct
+    val transitiveDeps = outer.transitiveModuleCompileModuleDeps.distinct
+    StrictDepsAutofix.Input(
+      moduleName = moduleSegments.render,
+      moduleSegments = moduleSegments,
+      sourceFile = moduleSourcePath,
+      moduleLine = moduleCtx.lineNum,
+      normalDirectDeps = normalDirectDeps.map(strictDepsAutofixModuleRef),
+      compileDirectDeps = compileDirectDeps.map(strictDepsAutofixModuleRef),
+      transitiveDeps = transitiveDeps.map(strictDepsAutofixModuleRef),
+      missingDirectDeps = report.missingDirectModuleDeps.map(_.moduleName),
+      unusedDirectDeps = report.unusedDirectModuleDeps
+    )
+  }
+
+  private def strictDepsAutofixModuleRef(module: JavaModule): StrictDepsAutofix.ModuleRef = {
+    StrictDepsAutofix.ModuleRef(
+      moduleName = module.toString,
+      segments = module.moduleSegments,
+      directDependencyModuleNames = directCompileModules(module).map(_.toString).distinct.sorted
+    )
+  }
+
+  private def moduleSourcePath: os.Path = {
+    val path = Paths.get(moduleCtx.fileName)
+    if (path.isAbsolute) {
+      os.Path(path)
+    } else {
+      BuildCtx.workspaceRoot / os.RelPath(moduleCtx.fileName)
+    }
   }
 
   private def sourceFileIds(files: Seq[PathRef]): Seq[String] = {

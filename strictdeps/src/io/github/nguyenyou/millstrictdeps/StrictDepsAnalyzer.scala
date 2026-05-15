@@ -616,6 +616,14 @@ object StrictDepsAnalyzer {
       .view
       .mapValues(_.distinct.sorted.toSet)
       .toMap
+    val classesBySource = sourcesByClass.toSeq
+      .flatMap { case (className, sources) =>
+        sources.map(source => source -> className)
+      }
+      .groupMap { case (source, _) => source } { case (_, className) => className }
+      .view
+      .mapValues(_.toSet)
+      .toMap
 
     AnalyzedModule(
       moduleName = module.moduleName,
@@ -624,6 +632,7 @@ object StrictDepsAnalyzer {
       definedClasses = defined,
       directDependencyModuleNames = module.directDependencyModuleNames.distinct.sorted,
       sourcesByClass = sourcesByClass,
+      classesBySource = classesBySource,
       sources = allSources
     )
   }
@@ -893,7 +902,9 @@ object StrictDepsAnalyzer {
     val relevantModules = analyzedModules.filterNot(module => ignoredModuleNames.contains(module.moduleName))
     val directlyUsedProvidedClasses = usedExternalClasses.intersect(allProvidedClasses)
     val graph = classDependencyGraph(analyzedModules, allProvidedClasses)
-    val reachableProvidedClasses = reachableClasses(directlyUsedProvidedClasses, graph)
+    // Zinc can miss companion/member-body edges, so keep Scala source peers in the reachability walk.
+    val sourcePeerClassesByClass = sourcePeerClasses(analyzedModules)
+    val reachableProvidedClasses = reachableClasses(directlyUsedProvidedClasses, graph, sourcePeerClassesByClass)
       .intersect(allProvidedClasses)
 
     val moduleReachability = relevantModules
@@ -971,7 +982,8 @@ object StrictDepsAnalyzer {
 
   private def reachableClasses(
       rootClasses: Set[String],
-      dependencyGraph: Map[String, Set[String]]
+      dependencyGraph: Map[String, Set[String]],
+      sourcePeerClassesByClass: Map[String, Set[String]]
   ): Set[String] = {
     val seen = mutable.Set.empty[String]
     val queue = mutable.Queue.empty[String]
@@ -981,7 +993,9 @@ object StrictDepsAnalyzer {
       val className = queue.dequeue()
       if (!seen.contains(className)) {
         seen += className
-        dependencyGraph.getOrElse(className, Set.empty).toSeq.sorted.foreach { dependencyClass =>
+        val nextClasses =
+          dependencyGraph.getOrElse(className, Set.empty) ++ sourcePeerClassesByClass.getOrElse(className, Set.empty)
+        nextClasses.toSeq.sorted.foreach { dependencyClass =>
           if (!seen.contains(dependencyClass)) {
             queue.enqueue(dependencyClass)
           }
@@ -990,6 +1004,18 @@ object StrictDepsAnalyzer {
     }
 
     seen.toSet
+  }
+
+  private def sourcePeerClasses(analyzedModules: Seq[AnalyzedModule]): Map[String, Set[String]] = {
+    analyzedModules
+      .flatMap { module =>
+        module.sourcesByClass.keys.map { className =>
+          className -> module.sourcesByClass
+            .getOrElse(className, Set.empty)
+            .flatMap(source => module.classesBySource.getOrElse(source, Set.empty))
+        }
+      }
+      .toMap
   }
 
   def whoIntroduces(
@@ -1207,6 +1233,7 @@ object StrictDepsAnalyzer {
       definedClasses: Set[String],
       directDependencyModuleNames: Seq[String],
       sourcesByClass: Map[String, Set[String]],
+      classesBySource: Map[String, Set[String]],
       sources: Set[String]
   )
 

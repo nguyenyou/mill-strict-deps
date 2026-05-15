@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.8.1 - 2026-05-15
+
+### Fixed
+
+- Fixed classpath reachability so classes defined from the same source file are
+  treated as peers during the reachability walk. This prevents
+  companion/object-created helper classes from being incorrectly reported as
+  unused.
+
+### Changed
+
+- Updated the bundled agent skill docs with the `strictDepsWhoIntroduces --target`
+  workflow.
+
+### Notes
+
+- Added a regression fixture for a facade object that constructs a backend helper
+  and calls a child wrapper, while keeping an intentionally unused component as
+  the negative control.
+
 ## 1.8.0 - 2026-05-15
 
 ### Added

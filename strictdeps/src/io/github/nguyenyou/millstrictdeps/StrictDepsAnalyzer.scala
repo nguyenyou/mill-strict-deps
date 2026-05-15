@@ -315,7 +315,10 @@ object StrictDepsAnalyzer {
           ownClassCount = weight.ownClassCount,
           reachableClassCount = weight.reachableClassCount,
           wastedClassCount = weight.wastedClassCount,
-          reachableClassPercent = weight.reachableClassPercent
+          reachableClassPercent = weight.reachableClassPercent,
+          usedClassCount = weight.usedClassCount,
+          usedClassTotalCount = weight.usedClassTotalCount,
+          usedClassPercent = weight.usedClassPercent
         )
       }
       .sortBy { dependency =>
@@ -443,6 +446,52 @@ object StrictDepsAnalyzer {
       wastedDeltaSourcePercent = percent(totalWastedDeltaSourceCount, totalDeltaSourceCount),
       badNodes = badNodes,
       badEdges = badEdges
+    )
+  }
+
+  def downstreamUsageReport(
+      targetModuleName: String,
+      snapshots: Seq[StrictDepsCompileWasteSnapshot]
+  ): StrictDepsDownstreamUsageReport = {
+    val downstreamModules = snapshots.flatMap { snapshot =>
+      snapshot.dependencies
+        .find(_.moduleName == targetModuleName)
+        .map { dependency =>
+          StrictDepsDownstreamUsageModule(
+            moduleName = snapshot.moduleName,
+            relationship = dependency.relationship,
+            introducedByModuleNames = dependency.introducedByModuleNames,
+            usedClassCount = dependency.usedClassCount,
+            usedClassTotalCount = dependency.usedClassTotalCount,
+            usedClassPercent = dependency.usedClassPercent,
+            reachableClassCount = dependency.reachableClassCount,
+            reachableClassTotalCount = dependency.ownClassCount,
+            reachableClassPercent = dependency.reachableClassPercent,
+            reachableSourceCount = dependency.reachableSourceCount,
+            reachableSourceTotalCount = dependency.ownSourceCount,
+            reachableSourcePercent = dependency.reachableSourcePercent
+          )
+        }
+    }.sortBy { module =>
+      (
+        -module.reachableSourceCount,
+        -module.reachableClassCount,
+        -module.usedClassCount,
+        if (module.relationship == "direct") 0 else 1,
+        module.moduleName
+      )
+    }
+
+    StrictDepsDownstreamUsageReport(
+      targetModuleName = targetModuleName,
+      rootModuleCount = snapshots.map(_.moduleName).distinct.size,
+      downstreamModuleCount = downstreamModules.map(_.moduleName).distinct.size,
+      directDownstreamModuleCount = downstreamModules
+        .filter(_.relationship == "direct")
+        .map(_.moduleName)
+        .distinct
+        .size,
+      downstreamModules = downstreamModules
     )
   }
 

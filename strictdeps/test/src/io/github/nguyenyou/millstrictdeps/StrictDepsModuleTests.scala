@@ -202,6 +202,8 @@ object StrictDepsModuleTests extends TestSuite {
         assert(compileWaste("wastedDeltaSourceCount").num == 1)
         assert(serverWaste("declaredDirect").bool)
         assert(serverWaste("relationship").str == "direct")
+        assert(serverWaste("usedClassCount").num == 0)
+        assert(serverWaste("usedClassTotalCount").num == 1)
         assert(serverWaste("wastedDeltaSourceCount").num == 1)
 
         val fixPlanResult = eval(StrictDepsFixtureBuild.app.strictDepsFixPlan).fold(
@@ -536,6 +538,8 @@ object StrictDepsModuleTests extends TestSuite {
         assert(fat.deltaSourceCount == 3)
         assert(fat.reachableDeltaSourceCount == 2)
         assert(fat.wastedDeltaSourceCount == 1)
+        assert(fat.usedClassCount == 1)
+        assert(fat.usedClassTotalCount == 3)
 
         val global = StrictDepsAnalyzer.compileWasteGlobalReport(Seq(appSnapshot, reachSnapshot))
         val fatNode = global.badNodes.find(_.moduleName == "fat").getOrElse {
@@ -551,6 +555,22 @@ object StrictDepsModuleTests extends TestSuite {
         assert(fatNode.totalDeltaSourceCount == 3)
         assert(fatEdge.wastedDeltaSourceCount == 1)
 
+        val downstream = StrictDepsAnalyzer.downstreamUsageReport(
+          targetModuleName = "fat",
+          snapshots = Seq(appSnapshot, reachSnapshot)
+        )
+        val fatClient = downstream.downstreamModules.find(_.moduleName == "reachClient").getOrElse {
+          throw new Exception("reachClient downstream usage row not found")
+        }
+
+        assert(downstream.rootModuleCount == 2)
+        assert(downstream.downstreamModuleCount == 1)
+        assert(downstream.directDownstreamModuleCount == 1)
+        assert(fatClient.relationship == "direct")
+        assert(fatClient.usedClassCount == 1)
+        assert(fatClient.reachableClassCount == 2)
+        assert(fatClient.reachableSourceCount == 2)
+
         eval(
           strictDepsCompileWaste.compileWaste(
             Tasks(Seq(
@@ -562,6 +582,22 @@ object StrictDepsModuleTests extends TestSuite {
         ) match {
           case Left(failure) =>
             throw new Exception(s"Unexpected strictDepsCompileWaste global failure: $failure")
+          case Right(_) =>
+            ()
+        }
+
+        eval(
+          strictDepsDownstreamUsage.downstreamUsage(
+            target = "fat",
+            snapshots = Tasks(Seq(
+              StrictDepsFixtureBuild.app.strictDepsCompileWasteSnapshot,
+              StrictDepsFixtureBuild.reachClient.strictDepsCompileWasteSnapshot
+            )),
+            limit = 10
+          )
+        ) match {
+          case Left(failure) =>
+            throw new Exception(s"Unexpected strictDepsDownstreamUsage global failure: $failure")
           case Right(_) =>
             ()
         }

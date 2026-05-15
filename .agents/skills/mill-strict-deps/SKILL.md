@@ -88,6 +88,9 @@ Which modules are upstream of most of the build?
 
 Which nodes and edges waste compile input across the build?
   ./mill io.github.nguyenyou.millstrictdeps.strictDepsCompileWaste/
+
+Which downstream clients need one upstream module?
+  ./mill io.github.nguyenyou.millstrictdeps.strictDepsDownstreamUsage/ --target uiWidget
 ```
 
 When chaining Mill tasks, separate top-level tasks with `+`:
@@ -144,6 +147,7 @@ Run these from the external module names:
 ```text
 ./mill io.github.nguyenyou.millstrictdeps.strictDepsCommonAncestors/
 ./mill io.github.nguyenyou.millstrictdeps.strictDepsCompileWaste/
+./mill io.github.nguyenyou.millstrictdeps.strictDepsDownstreamUsage/ --target uiWidget
 ```
 
 `strictDepsCommonAncestors` collects `__.strictDepsGraphSnapshot`. It ranks modules by how many analyzed modules eventually depend on them. A row where `needed by == comparable` is a common ancestor.
@@ -153,7 +157,9 @@ Run these from the external module names:
 - `bad nodes`: dependency modules with repeated wasted delta source count.
 - `bad edges`: client -> dependency rows with high wasted delta source count.
 
-Both global commands accept `limit`, default `50`.
+`strictDepsDownstreamUsage --target <target>` collects `__.strictDepsCompileWasteSnapshot`, filters to one dependency module, and prints each selected downstream client that has it in the compile world. Rows include an unlabeled row-number column after sorting. The key columns are directly referenced classes, reachable classes, and reachable sources for the target dependency in that client, rendered with the same colored progress bars as `strictDepsCompileDepth`. To limit the universe to selected clients, pass one Mill selector expression positionally, for example `'{clientA.js,clientB.js}.strictDepsCompileWasteSnapshot'`.
+
+All global commands accept `limit`, default `50`.
 
 ## Interpret The Facts
 
@@ -195,6 +201,9 @@ strict shape:
 
 `compile waste`
 : `wasted delta sources = delta sources - reachable delta sources`. Use it to identify direct edges or transitive rows that make clients compile source files they do not reach.
+
+`downstream usage`
+: The inverse of running `strictDepsCompileDepth` on many clients. Start with one upstream module and compare each downstream client by the target module's directly referenced classes, reachable classes, and reachable sources.
 
 `who introduces`
 : Given `target`, each row says: "this direct dep opens a path to that transitive module." A row like `appB  appB -> shared -> target` means `appA` sees `target` because `appA` directly depends on `appB`. Use this to decide which direct edge to remove, narrow, or move; do not add `target` as a direct dep unless current source actually uses its classes.

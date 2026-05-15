@@ -529,7 +529,10 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
             ownClassCount = 3,
             reachableClassCount = 2,
             wastedClassCount = 1,
-            reachableClassPercent = 66.7
+            reachableClassPercent = 66.7,
+            usedClassCount = 1,
+            usedClassTotalCount = 3,
+            usedClassPercent = 33.3
           )
         )
       )
@@ -559,6 +562,27 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(edgeRow.contains("direct"))
       assert(edgeRow.contains("fat"))
       assert(globalMarkdown.linesIterator.forall(line => !line.endsWith(" ")))
+
+      val downstream = StrictDepsAnalyzer.downstreamUsageReport(
+        targetModuleName = "fat",
+        snapshots = Seq(snapshot)
+      )
+      val downstreamMarkdown = StrictDepsDownstreamUsageRenderer.render(downstream, limit = 10)
+
+      assert(downstreamMarkdown.contains("target module"))
+      assert(downstreamMarkdown.contains("fat"))
+      assert(downstreamMarkdown.contains("client  relationship  introduced by"))
+      assert(!downstreamMarkdown.linesIterator.exists(_.startsWith("count")))
+      assert(downstreamMarkdown.contains("directly referenced classes"))
+      val clientRow = downstreamMarkdown.linesIterator.find(line =>
+        line.contains("app") && line.contains("fat")
+      ).getOrElse("")
+      assert(clientRow.trim.startsWith("1  app"))
+      assert(clientRow.contains("direct"))
+      assert(clientRow.contains("1 / 3 "))
+      assert(clientRow.contains("2 / 3 "))
+      assert(clientRow.contains("█"))
+      assert(downstreamMarkdown.linesIterator.forall(line => !line.endsWith(" ")))
     }
 
     test("renders fix plan separately from report facts") {

@@ -288,6 +288,39 @@ bad nodes = dependency modules with high repeated wasted delta
 bad edges = client -> dependency rows with high wasted delta
 ```
 
+The global `strictDepsDownstreamUsage` command answers the reverse question for
+one dependency module:
+
+```text
+shared.ui.js
+   ^
+   |
+clientA   clientB   clientC
+```
+
+It collects the same `__.strictDepsCompileWasteSnapshot` data, filters to the
+target dependency, and prints one row per selected downstream client that has
+the target in its compile world, with an unlabeled row-number column numbering
+the sorted rows. The important columns match
+`strictDepsCompileDepth`, including the colored progress bars:
+
+```text
+directly referenced classes = target classes directly referenced by the client
+reachable classes           = target classes reachable from those direct roots
+reachable sources           = target sources defining the reachable classes
+```
+
+Use this when you already know the upstream module and want to compare how much
+each client actually needs from it. By default it collects all
+`__.strictDepsCompileWasteSnapshot` tasks. To limit the universe to selected app
+clients, pass one Mill selector expression positionally:
+
+```text
+./mill io.github.nguyenyou.millstrictdeps.strictDepsDownstreamUsage/ \
+  --target shared.ui.js \
+  '{clientA.js,clientB.js}.strictDepsCompileWasteSnapshot'
+```
+
 Use `strictDepsCommonAncestors` to find modules that are upstream of almost
 everything. Use `strictDepsCompileWaste` to find which of those common or large
 modules are actually wasting compile input for clients.
@@ -298,7 +331,7 @@ modules are actually wasting compile input for clients.
 
 ```scala
 //| mvnDeps:
-//| - io.github.nguyenyou::mill-strict-deps::1.9.0
+//| - io.github.nguyenyou::mill-strict-deps::1.10.0
 ```
 
 The `::version` shorthand appends `_mill$MILL_BIN_PLATFORM`, so on Mill 1.x it
@@ -335,6 +368,9 @@ object appA extends ScalaModule with StrictDepsModule {
 
 # Global waste command. Collects every __.strictDepsCompileWasteSnapshot.
 ./mill io.github.nguyenyou.millstrictdeps.strictDepsCompileWaste/
+
+# Global reverse-usage command for one dependency module.
+./mill io.github.nguyenyou.millstrictdeps.strictDepsDownstreamUsage/ --target uiWidget
 ```
 
 Outputs:

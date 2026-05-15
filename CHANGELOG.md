@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.10.0 - 2026-05-15
+
+### Added
+
+- Added global `strictDepsDownstreamUsage --target <module>` command. It
+  collects `__.strictDepsCompileWasteSnapshot`, filters to one dependency
+  module, and prints each downstream client with directly referenced classes,
+  reachable classes, and reachable sources for that dependency.
+- Rendered `strictDepsDownstreamUsage` rows with the same colored relationship
+  marker and count/progress bars used by `strictDepsCompileDepth`.
+- Added an unlabeled row-number column to `strictDepsDownstreamUsage` so sorted
+  downstream rows are numbered in the printed table.
+- Added direct-reference class counts to compile-waste snapshot dependency data
+  so whole-build reverse-usage views can reuse the same per-client facts as
+  `strictDepsCompileDepth`.
+
+### Notes
+
+- This is the inverse of running `strictDepsCompileDepth` on many clients. Start
+  with a module such as `uiWidget`, then compare how much each selected
+  client actually reaches from it.
+
 ## 1.9.1 - 2026-05-15
 
 ### Fixed

@@ -170,7 +170,10 @@ final case class StrictDepsCompileWasteDependency(
     ownClassCount: Int,
     reachableClassCount: Int,
     wastedClassCount: Int,
-    reachableClassPercent: Double
+    reachableClassPercent: Double,
+    usedClassCount: Int = 0,
+    usedClassTotalCount: Int = 0,
+    usedClassPercent: Double = 0.0
 ) {
   def relationship: String = {
     if (declaredDirect) {
@@ -232,6 +235,29 @@ final case class StrictDepsCompileWasteEdge(
     reachableClassCount: Int,
     wastedClassCount: Int,
     reachableClassPercent: Double
+)
+
+final case class StrictDepsDownstreamUsageReport(
+    targetModuleName: String,
+    rootModuleCount: Int,
+    downstreamModuleCount: Int,
+    directDownstreamModuleCount: Int,
+    downstreamModules: Seq[StrictDepsDownstreamUsageModule]
+)
+
+final case class StrictDepsDownstreamUsageModule(
+    moduleName: String,
+    relationship: String,
+    introducedByModuleNames: Seq[String],
+    usedClassCount: Int,
+    usedClassTotalCount: Int,
+    usedClassPercent: Double,
+    reachableClassCount: Int,
+    reachableClassTotalCount: Int,
+    reachableClassPercent: Double,
+    reachableSourceCount: Int,
+    reachableSourceTotalCount: Int,
+    reachableSourcePercent: Double
 )
 
 final case class StrictDepsCommonAncestorReport(

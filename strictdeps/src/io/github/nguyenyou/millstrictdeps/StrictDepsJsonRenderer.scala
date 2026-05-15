@@ -240,7 +240,10 @@ object StrictDepsJsonRenderer {
       "ownClassCount" -> Num(dependency.ownClassCount),
       "reachableClassCount" -> Num(dependency.reachableClassCount),
       "wastedClassCount" -> Num(dependency.wastedClassCount),
-      "reachableClassPercent" -> Num(dependency.reachableClassPercent)
+      "reachableClassPercent" -> Num(dependency.reachableClassPercent),
+      "usedClassCount" -> Num(dependency.usedClassCount),
+      "usedClassTotalCount" -> Num(dependency.usedClassTotalCount),
+      "usedClassPercent" -> Num(dependency.usedClassPercent)
     )
   }
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.12.0 - 2026-05-15
+
+### Changed
+
+- Changed `strictDepsCompileDepth` to print only the depth table and target row
+  by default. Pass `--showSummary true` to include the summary block.
+
+### Added
+
+- Added total target-row values for directly referenced classes, reachable
+  classes, and reachable sources in `strictDepsCompileDepth`.
+
 ## 1.11.0 - 2026-05-15
 
 ### Added

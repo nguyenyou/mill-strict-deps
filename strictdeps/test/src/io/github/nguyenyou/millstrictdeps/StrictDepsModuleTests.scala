@@ -495,6 +495,18 @@ object StrictDepsModuleTests extends TestSuite {
           case Right(_) =>
             ()
         }
+        eval(StrictDepsFixtureBuild.app.strictDepsCompileDepth(showSummary = false)) match {
+          case Left(failure) =>
+            throw new Exception(s"Unexpected strictDepsCompileDepth summary filter failure: $failure")
+          case Right(_) =>
+            ()
+        }
+        eval(StrictDepsFixtureBuild.app.strictDepsCompileDepth(showSummary = true)) match {
+          case Left(failure) =>
+            throw new Exception(s"Unexpected strictDepsCompileDepth summary opt-in failure: $failure")
+          case Right(_) =>
+            ()
+        }
       }
     }
 

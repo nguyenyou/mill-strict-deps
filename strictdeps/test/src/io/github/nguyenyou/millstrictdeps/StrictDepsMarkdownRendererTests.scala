@@ -394,7 +394,8 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
           ),
           targetDepthIndex = 2,
           reachability = report.reachability
-        )
+        ),
+        showSummary = true
       )
 
       assert(markdown.linesIterator.exists(line => line.startsWith("metric") && line.contains("count")))
@@ -451,8 +452,53 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(targetRow.contains("app"))
       assert(targetRow.contains("target"))
       assert(targetTokens.contains("3"))
+      assert(targetRow.contains("2 / 5 "))
+      assert(targetRow.contains("3 / 5 "))
       assert(targetDepthRow.nonEmpty)
       assert(lines.forall(line => !line.endsWith(" ")))
+    }
+
+    test("renders compile depth table without summary by default") {
+      val dependencyWeight = StrictDepsModuleWeightComparison(
+        moduleName = "api",
+        declaredDirect = true,
+        ownSources = StrictDepsSourceWeightComparison(2, 2),
+        absoluteSources = StrictDepsSourceWeightComparison(2, 2),
+        compileDepthDeltaSources = StrictDepsSourceWeightComparison(2, 2),
+        ownClassCount = 2,
+        absoluteClassCount = 2,
+        usedClassCount = 1,
+        usedClassTotalCount = 2,
+        usedClassPercent = 50.0,
+        reachableClassCount = 1,
+        reachableClassTotalCount = 2,
+        reachableClassPercent = 50.0,
+        reachableSourceCount = 1,
+        reachableSourceTotalCount = 2,
+        reachableSourcePercent = 50.0
+      )
+      val markdown = StrictDepsCompileDepthRenderer.render(
+        moduleName = "app",
+        report = StrictDepsWeightReport(
+          currentModuleSources = StrictDepsSourceWeightComparison(1, 1),
+          dependencySources = StrictDepsSourceWeightComparison(2, 2),
+          totalSources = StrictDepsSourceWeightComparison(3, 3),
+          currentModuleClassCount = 1,
+          totalClassCount = 3,
+          dependencyWeights = Seq(dependencyWeight),
+          compileDepths = Seq(StrictDepsCompileDepth(0, Seq(dependencyWeight))),
+          targetDepthIndex = 1,
+          reachability = report.reachability
+        )
+      )
+      val lines = markdown.linesIterator.toSeq
+      val targetRow = lines.find(_.startsWith("target")).getOrElse("")
+
+      assert(lines.headOption.exists(_.startsWith("depth")))
+      assert(!markdown.contains("metric"))
+      assert(!markdown.contains("reachable dependency classes"))
+      assert(targetRow.contains("2 / 5 "))
+      assert(targetRow.contains("3 / 5 "))
     }
 
     test("filters compile depths to zero reachable sources") {

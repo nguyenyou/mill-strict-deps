@@ -126,7 +126,7 @@ When chaining Mill tasks, separate top-level tasks with `+`:
 : Print a terminal table sorted by absolute dependency source weight. Use it to find broad direct or transitive deps and see Mill/Zinc source counts, source lines, classes, directly referenced classes, reachable classes, reachable sources, and delta weight.
 
 `strictDepsCompileDepth`
-: Print the same weight data grouped by compile depth. Use it to read the dependency graph from upstream modules down to the target module. Pass `--zeroReachableSourcesOnly true` to show only dependency rows where the target has the module in its compile world but the reachable source count is zero.
+: Print the same weight data grouped by compile depth. Use it to read the dependency graph from upstream modules down to the target module. By default, it prints only the table and target row. Pass `--showSummary true` to include the summary block. Pass `--zeroReachableSourcesOnly true` to show only dependency rows where the target has the module in its compile world but the reachable source count is zero.
 
 `strictDepsCompileWaste`
 : Print a waste-first table for one module. Use it to answer: "which dependency row introduced source files this module cannot reach through Zinc class dependencies?" It accepts `limit`, default `50`.

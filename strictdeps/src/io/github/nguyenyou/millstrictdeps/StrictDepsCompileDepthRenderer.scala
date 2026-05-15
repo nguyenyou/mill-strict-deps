@@ -24,11 +24,14 @@ object StrictDepsCompileDepthRenderer {
   def render(
       moduleName: String,
       report: StrictDepsWeightReport,
-      zeroReachableSourcesOnly: Boolean = false
+      zeroReachableSourcesOnly: Boolean = false,
+      showSummary: Boolean = false
   ): String = {
     val builder = new StringBuilder
-    appendSummary(builder, report)
-    appendComparisonNote(builder, report)
+    if (showSummary) {
+      appendSummary(builder, report)
+      appendComparisonNote(builder, report)
+    }
 
     val visibleDepths = visibleCompileDepths(report.compileDepths, zeroReachableSourcesOnly)
     val layout = depthLayout(visibleDepths, moduleName, report)
@@ -151,9 +154,9 @@ object StrictDepsCompileDepthRenderer {
     val targetDeltaValue = formatComparison(report.currentModuleSources)
     val targetOwnLinesValue = formatComparison(report.currentModuleSourceLines)
     val targetOwnClassesValue = report.currentModuleClassCount.toString
-    val targetUsedClassesValue = fansi.Str("")
-    val targetReachableClassesValue = fansi.Str("")
-    val targetReachableSourcesValue = fansi.Str("")
+    val targetUsedClassesValue = targetUsedClasses(report.reachability)
+    val targetReachableClassesValue = targetReachableClasses(report.reachability)
+    val targetReachableSourcesValue = targetReachableSources(report.reachability)
     val targetAbsoluteClassesValue = report.totalClassCount.toString
     val targetNoteValue = targetNote(report)
     val rows = weights.map(renderedRow)
@@ -209,9 +212,9 @@ object StrictDepsCompileDepthRenderer {
     val deltaValue = formatComparison(report.currentModuleSources)
     val ownLinesValue = formatComparison(report.currentModuleSourceLines)
     val ownClassesValue = report.currentModuleClassCount.toString
-    val usedClassesValue = fansi.Str("")
-    val reachableClassesValue = fansi.Str("")
-    val reachableSourcesValue = fansi.Str("")
+    val usedClassesValue = targetUsedClasses(report.reachability)
+    val reachableClassesValue = targetReachableClasses(report.reachability)
+    val reachableSourcesValue = targetReachableSources(report.reachability)
     val totalClassesValue = report.totalClassCount.toString
     val note = targetNote(report)
 
@@ -439,10 +442,42 @@ object StrictDepsCompileDepthRenderer {
     countAndBar(weight.reachableSourceCount, weight.reachableSourceTotalCount, weight.reachableSourcePercent)
   }
 
+  private def targetUsedClasses(reachability: StrictDepsReachabilityReport): fansi.Str = {
+    countAndBar(
+      count = reachability.directUsedClassCount,
+      total = reachability.providedClassCount,
+      percent = percent(reachability.directUsedClassCount, reachability.providedClassCount)
+    )
+  }
+
+  private def targetReachableClasses(reachability: StrictDepsReachabilityReport): fansi.Str = {
+    countAndBar(
+      count = reachability.reachableClassCount,
+      total = reachability.providedClassCount,
+      percent = reachability.reachableClassPercent
+    )
+  }
+
+  private def targetReachableSources(reachability: StrictDepsReachabilityReport): fansi.Str = {
+    countAndBar(
+      count = reachability.reachableSourceCount,
+      total = reachability.providedSourceCount,
+      percent = reachability.reachableSourcePercent
+    )
+  }
+
   private def countAndBar(count: Int, total: Int, percent: Double): fansi.Str = {
     val countText = s"$count / $total "
     val prefix = if (count == 0) fansi.Color.Red(countText) else fansi.Str(countText)
     prefix ++ progressBar(percent)
+  }
+
+  private def percent(numerator: Int, denominator: Int): Double = {
+    if (denominator == 0) {
+      0.0
+    } else {
+      math.round(numerator.toDouble * 1000.0 / denominator).toDouble / 10.0
+    }
   }
 
   private def progressBar(percent: Double): fansi.Str = {

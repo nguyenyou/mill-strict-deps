@@ -59,6 +59,15 @@ object StrictDepsFixtureBuild extends TestRootModule {
     override def moduleDeps = Seq(fat)
   }
 
+  object componentLib extends ScalaModule {
+    def scalaVersion = sharedScalaVersion
+  }
+
+  object componentClient extends ScalaModule with StrictDepsModule {
+    def scalaVersion = sharedScalaVersion
+    override def moduleDeps = Seq(componentLib)
+  }
+
   object commonCore extends ScalaModule {
     def scalaVersion = sharedScalaVersion
   }
@@ -314,6 +323,37 @@ object StrictDepsModuleTests extends TestSuite {
         assert(markdown.contains("Classpath Reachability"))
         assert(markdown.contains("com.example.fat.FatEntry"))
         assert(markdown.contains("Unused.scala"))
+      }
+    }
+
+    test("marks companion-created helper classes as reachable") {
+      val resourceFolder = os.Path(sys.env("MILL_TEST_RESOURCE_DIR"))
+      UnitTester(StrictDepsFixtureBuild, resourceFolder / "strict-deps-project").scoped { eval =>
+        val jsonResult = eval(StrictDepsFixtureBuild.componentClient.strictDepsJsonReport).fold(
+          failure => throw new Exception(failure.toString),
+          identity
+        )
+        val json = read(os.read(jsonResult.value.path))
+        val componentLib = json("reachability")("modules").arr.find { module =>
+          module("moduleName").str == "componentLib"
+        }.getOrElse(throw new Exception("componentLib reachability module not found"))
+
+        val reachableClasses = componentLib("reachableClasses").arr.map(_.str).toSet
+        val unusedClasses = componentLib("unusedClasses").arr.map(_.str).toSet
+        val reachableSources = componentLib("reachableSources").arr.map(_.str)
+        val unusedSources = componentLib("unusedSources").arr.map(_.str)
+
+        assert(json("moduleName").str == "componentClient")
+        assert(!json("hasProblems").bool)
+        assert(componentLib("directUsedClasses").arr.exists(_.str == "com.example.component.Facade"))
+        assert(reachableClasses.contains("com.example.component.Facade"))
+        assert(reachableClasses.contains("com.example.component.Facade$.Backend"))
+        assert(reachableClasses.contains("com.example.component.ChildWrapper"))
+        assert(!unusedClasses.contains("com.example.component.Facade$.Backend"))
+        assert(!unusedClasses.contains("com.example.component.ChildWrapper"))
+        assert(reachableSources.exists(_.endsWith("Facade.scala")))
+        assert(reachableSources.exists(_.endsWith("ChildWrapper.scala")))
+        assert(unusedSources.exists(_.endsWith("UnusedComponent.scala")))
       }
     }
 

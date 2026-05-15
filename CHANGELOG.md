@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.11.0 - 2026-05-15
+
+### Added
+
+- Added `strictDepsCompileDepth --zeroReachableSourcesOnly true` to keep only
+  compile-world dependency rows whose reachable source count is zero.
+
 ## 1.10.0 - 2026-05-15
 
 ### Added

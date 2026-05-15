@@ -489,6 +489,12 @@ object StrictDepsModuleTests extends TestSuite {
           case Right(_) =>
             ()
         }
+        eval(StrictDepsFixtureBuild.app.strictDepsCompileDepth(zeroReachableSourcesOnly = true)) match {
+          case Left(failure) =>
+            throw new Exception(s"Unexpected strictDepsCompileDepth zero-reachable filter failure: $failure")
+          case Right(_) =>
+            ()
+        }
       }
     }
 

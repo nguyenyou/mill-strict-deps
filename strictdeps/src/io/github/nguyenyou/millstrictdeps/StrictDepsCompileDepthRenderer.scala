@@ -23,20 +23,37 @@ object StrictDepsCompileDepthRenderer {
 
   def render(
       moduleName: String,
-      report: StrictDepsWeightReport
+      report: StrictDepsWeightReport,
+      zeroReachableSourcesOnly: Boolean = false
   ): String = {
     val builder = new StringBuilder
     appendSummary(builder, report)
     appendComparisonNote(builder, report)
 
-    val layout = depthLayout(report.compileDepths, moduleName, report)
+    val visibleDepths = visibleCompileDepths(report.compileDepths, zeroReachableSourcesOnly)
+    val layout = depthLayout(visibleDepths, moduleName, report)
     appendDepthHeader(builder, layout)
-    report.compileDepths.foreach { depth =>
+    visibleDepths.foreach { depth =>
       appendDepth(builder, depth, layout)
       appendSeparator(builder, layout.tableWidth)
     }
     appendTarget(builder, moduleName, report, layout)
     builder.result()
+  }
+
+  private def visibleCompileDepths(
+      depths: Seq[StrictDepsCompileDepth],
+      zeroReachableSourcesOnly: Boolean
+  ): Seq[StrictDepsCompileDepth] = {
+    if (!zeroReachableSourcesOnly) {
+      depths
+    } else {
+      depths
+        .map { depth =>
+          depth.copy(modules = depth.modules.filter(_.reachableSourceCount == 0))
+        }
+        .filter(_.modules.nonEmpty)
+    }
   }
 
   private def appendDepthHeader(

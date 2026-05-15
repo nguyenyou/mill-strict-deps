@@ -129,12 +129,13 @@ trait StrictDepsModule extends ScalaModule { outer =>
     Result.Success(())
   }
 
-  def strictDepsCompileDepth(): Command[Unit] = Task.Command {
+  def strictDepsCompileDepth(zeroReachableSourcesOnly: Boolean = false): Command[Unit] = Task.Command {
     val report = analyzeStrictDepsWeight()()
     Task.log.info(
       "\n" + StrictDepsCompileDepthRenderer.render(
         moduleName = moduleSegments.render,
-        report = report
+        report = report,
+        zeroReachableSourcesOnly = zeroReachableSourcesOnly
       )
     )
     Result.Success(())

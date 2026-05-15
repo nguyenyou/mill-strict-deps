@@ -203,6 +203,9 @@ delta weight    = source files first introduced by that row in top-down order
 
 This view does not draw edges. It uses the direct module-dependency graph to
 place nodes by compile depth, so the terminal output reads top down as compile order.
+Pass `--zeroReachableSourcesOnly true` to keep only dependency rows where the
+target has the module in its compile world but the `reachable sources` count is
+zero.
 
 For a whole-build view, `strictDepsCommonAncestors` prints which modules are
 upstream of the most other modules:
@@ -359,6 +362,7 @@ object appA extends ScalaModule with StrictDepsModule {
 ./mill appA.strictDepsApplyFix
 ./mill appA.strictDepsWeight
 ./mill appA.strictDepsCompileDepth
+./mill appA.strictDepsCompileDepth --zeroReachableSourcesOnly true
 ./mill appA.strictDepsCompileWaste
 ./mill appA.strictDepsWhoIntroduces --target uiWidget
 ./mill appA.strictDepsCheck

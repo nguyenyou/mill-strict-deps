@@ -455,6 +455,68 @@ object StrictDepsMarkdownRendererTests extends TestSuite {
       assert(lines.forall(line => !line.endsWith(" ")))
     }
 
+    test("filters compile depths to zero reachable sources") {
+      val reachedWeight = StrictDepsModuleWeightComparison(
+        moduleName = "usedDomain",
+        declaredDirect = false,
+        ownSources = StrictDepsSourceWeightComparison(2, 2),
+        absoluteSources = StrictDepsSourceWeightComparison(2, 2),
+        compileDepthDeltaSources = StrictDepsSourceWeightComparison(2, 2),
+        ownClassCount = 2,
+        absoluteClassCount = 2,
+        usedClassCount = 1,
+        usedClassTotalCount = 2,
+        usedClassPercent = 50.0,
+        reachableClassCount = 1,
+        reachableClassTotalCount = 2,
+        reachableClassPercent = 50.0,
+        reachableSourceCount = 1,
+        reachableSourceTotalCount = 2,
+        reachableSourcePercent = 50.0
+      )
+      val zeroReachableWeight = StrictDepsModuleWeightComparison(
+        moduleName = "unusedApi",
+        declaredDirect = true,
+        ownSources = StrictDepsSourceWeightComparison(2, 2),
+        absoluteSources = StrictDepsSourceWeightComparison(4, 4),
+        compileDepthDeltaSources = StrictDepsSourceWeightComparison(2, 2),
+        ownClassCount = 2,
+        absoluteClassCount = 4,
+        usedClassCount = 0,
+        usedClassTotalCount = 2,
+        usedClassPercent = 0.0,
+        reachableClassCount = 0,
+        reachableClassTotalCount = 2,
+        reachableClassPercent = 0.0,
+        reachableSourceCount = 0,
+        reachableSourceTotalCount = 2,
+        reachableSourcePercent = 0.0
+      )
+      val markdown = StrictDepsCompileDepthRenderer.render(
+        moduleName = "app",
+        report = StrictDepsWeightReport(
+          currentModuleSources = StrictDepsSourceWeightComparison(3, 3),
+          dependencySources = StrictDepsSourceWeightComparison(4, 4),
+          totalSources = StrictDepsSourceWeightComparison(7, 7),
+          dependencyWeights = Seq(zeroReachableWeight, reachedWeight),
+          compileDepths = Seq(
+            StrictDepsCompileDepth(0, Seq(reachedWeight)),
+            StrictDepsCompileDepth(1, Seq(zeroReachableWeight))
+          ),
+          targetDepthIndex = 2
+        ),
+        zeroReachableSourcesOnly = true
+      )
+
+      assert(markdown.contains("unusedApi"))
+      assert(!markdown.contains("usedDomain"))
+      assert(!markdown.contains("depth 0"))
+      assert(markdown.contains("depth 1"))
+      assert(markdown.contains("0 / 2 "))
+      assert(markdown.contains("target"))
+      assert(markdown.contains("depth 2"))
+    }
+
     test("renders common ancestors") {
       val markdown = StrictDepsCommonAncestorsRenderer.render(
         report = StrictDepsCommonAncestorReport(

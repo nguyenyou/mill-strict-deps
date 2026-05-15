@@ -327,6 +327,7 @@ object appA extends ScalaModule with StrictDepsModule {
 ./mill appA.strictDepsWeight
 ./mill appA.strictDepsCompileDepth
 ./mill appA.strictDepsCompileWaste
+./mill appA.strictDepsWhoIntroduces --target uiWidget
 ./mill appA.strictDepsCheck
 
 # Global graph command. Collects every __.strictDepsGraphSnapshot.
@@ -372,6 +373,26 @@ and `compileModuleDeps` definitions whose right-hand side is `Seq(...)`,
 can insert a missing dependency method for additions. It refuses computed deps,
 cross modules, ambiguous removals, and any source shape where the plugin would
 have to guess.
+
+`strictDepsWhoIntroduces --target <target>` explains why a transitive module is
+on the current module's compile classpath. It prints the shortest module chain
+from each direct compile module dep to `target`. Direct deps that do not reach
+`target` are omitted; if no direct dep reaches it, the command prints a one-line
+message.
+
+Use it after `strictDepsWeight`, `strictDepsCompileDepth`, or
+`strictDepsCompileWaste` shows a suspicious transitive module and you need to
+answer: "which direct edge brought this box into the room?"
+
+```text
+./mill appA.strictDepsWhoIntroduces --target uiWidget
+
+target: uiWidget
+
+direct dep  path
+----------  ----------------------
+appB-admin  appB-admin -> uiWidget
+```
 
 <details>
 <summary>How To Read The Report Numbers</summary>

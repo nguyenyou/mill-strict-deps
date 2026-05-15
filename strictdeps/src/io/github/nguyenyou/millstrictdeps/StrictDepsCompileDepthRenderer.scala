@@ -10,7 +10,7 @@ object StrictDepsCompileDepthRenderer {
   private val DeltaSourcesHeader = "delta sources"
   private val OwnLinesHeader = "own lines"
   private val OwnClassesHeader = "own classes"
-  private val UsedClassesHeader = "used classes"
+  private val UsedClassesHeader = "directly referenced classes"
   private val ReachableClassesHeader = "reachable classes"
   private val ReachableSourcesHeader = "reachable sources"
   private val AbsoluteClassesHeader = "absolute classes"
@@ -348,7 +348,7 @@ object StrictDepsCompileDepthRenderer {
       Seq.empty
     } else {
       Seq(
-        SummaryRow("direct used dependency classes", reachability.directUsedClassCount.toString, ""),
+        SummaryRow("directly referenced dependency classes", reachability.directUsedClassCount.toString, ""),
         SummaryRow(
           "reachable dependency classes",
           formatReachability(
@@ -359,7 +359,7 @@ object StrictDepsCompileDepthRenderer {
           ""
         ),
         SummaryRow("unused dependency classes", reachability.unusedClassCount.toString, ""),
-        SummaryRow("direct used dependency sources", reachability.directUsedSourceCount.toString, ""),
+        SummaryRow("directly referenced dependency sources", reachability.directUsedSourceCount.toString, ""),
         SummaryRow(
           "reachable dependency sources",
           formatReachability(

@@ -90,7 +90,7 @@ When chaining Mill tasks, separate top-level tasks with `+`:
 ## Module Tasks
 
 `strictDepsReport`
-: Write `out/<module>/strictDepsReport.dest/strict-deps-report.md`. Contains summary, classpath reachability, dependency source weight, dependency usage weight, unused direct deps, missing direct deps, used direct deps, and used library classpath entries.
+: Write `out/<module>/strictDepsReport.dest/strict-deps-report.md`. Contains summary, classpath reachability, dependency source weight, dependency reference weight, unused direct deps, missing direct deps, used direct deps, and used library classpath entries.
 
 `strictDepsJsonReport`
 : Write `out/<module>/strictDepsJsonReport.dest/strict-deps-report.json`. This is the richest output. Schema version `4` includes strict-deps facts, `reachability`, `weightReport`, and `compileWaste`.
@@ -102,7 +102,7 @@ When chaining Mill tasks, separate top-level tasks with `+`:
 : Fail when unused direct deps or missing direct deps exist, subject to the module settings below. Use for CI once false positives are understood.
 
 `strictDepsWeight`
-: Print a terminal table sorted by absolute dependency source weight. Use it to find broad direct or transitive deps and see Mill/Zinc source counts, source lines, classes, used classes, reachable classes, reachable sources, and delta weight.
+: Print a terminal table sorted by absolute dependency source weight. Use it to find broad direct or transitive deps and see Mill/Zinc source counts, source lines, classes, directly referenced classes, reachable classes, reachable sources, and delta weight.
 
 `strictDepsCompileDepth`
 : Print the same weight data grouped by compile depth. Use it to read the dependency graph from upstream modules down to the target module.
@@ -158,10 +158,10 @@ strict shape:
 : Direct internal deps where Zinc recorded no compile-time class use. Often removable, but watch for resources, reflection, generated code, macros, annotation processors, framework conventions, or runtime-only edges.
 
 `missing direct module deps`
-: Transitive internal modules whose classes were directly used by current source. Usually add these as direct deps.
+: Transitive internal modules whose classes were directly referenced by current source. Usually add these as direct deps.
 
-`dependency usage weight`
-: Advisory class coupling: used classes from dependency, share of this module's internal dependency usage, and share of that dependency's class surface touched.
+`dependency reference weight`
+: Advisory class coupling: directly referenced classes from dependency, share of this module's internal dependency references, and share of that dependency's class surface referenced.
 
 `dependency source weight`
 : Compile-cost signal. `own` is the dependency module itself. `absolute` is that module plus reachable transitive module deps. `delta` is the unique source count contributed by that row in the current ordering.
@@ -173,7 +173,7 @@ strict shape:
 : `0` means no upstream module deps inside the selected graph. `N` means the longest upstream direct-dependency path has `N` edges. The target module appears after its dependencies.
 
 `classpath reachability`
-: Start at dependency classes directly used by current source, then follow Zinc class dependencies through internal dependency modules. `not reached` means present on the dependency classpath but not reachable from those roots.
+: Start at dependency classes directly referenced by current source, then follow Zinc class dependencies through internal dependency modules. `not reached` means present on the dependency classpath but not reachable from those roots.
 
 `compile waste`
 : `wasted delta sources = delta sources - reachable delta sources`. Use it to identify direct edges or transitive rows that make clients compile source files they do not reach.

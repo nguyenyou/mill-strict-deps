@@ -121,11 +121,11 @@ remove appB-admin
 add uiWidget
 ```
 
-It also reports advisory dependency usage weight:
+It also reports advisory dependency reference weight:
 
 ```text
-used classes from dependency / all internal dependency classes used by this module
-used classes from dependency / all classes defined by that dependency
+directly referenced classes from dependency / all internal dependency classes directly referenced by this module
+directly referenced classes from dependency / all classes defined by that dependency
 ```
 
 That helps separate "this module leans heavily on core" from "this module only
@@ -164,17 +164,17 @@ absolute lines         = physical source lines in the dependency module
                          plus modules reachable from it
 delta lines            = source lines from this row's delta source files
 own classes            = Zinc classes defined by the dependency module itself
-used classes           = classes from that dependency module directly referenced
-                         by the current module, shown as used / total (%)
-                         or zero when no class is used
-reachable classes      = direct used classes plus Zinc class deps reachable
+directly referenced classes = classes from that dependency module directly
+                         referenced by the current module, shown as count / total (%)
+                         or zero when no class is directly referenced
+reachable classes      = directly referenced classes plus Zinc class deps reachable
                          from them inside that dependency module
 reachable sources      = source files in that dependency module that define
                          reachable classes
 absolute classes       = Zinc classes defined by the dependency module
                          plus modules reachable from it
-direct used dependency classes   = dependency classes this module directly touched
-reachable dependency classes     = direct used classes plus Zinc class deps
+directly referenced dependency classes = dependency classes this module directly referenced
+reachable dependency classes     = directly referenced classes plus Zinc class deps
                                    reachable from them, shown as reached / total (%)
 reachable dependency sources     = source files that define reachable dependency classes,
                                    shown as reached / total (%)
@@ -374,10 +374,10 @@ The report asks four questions:
 
 | metric | what it counts | what it means |
 | --- | ---: | --- |
-| `used direct module deps` | direct internal modules that contributed at least one used class | Good. The module declared the box, and the compiler saw code use pieces from that box. |
-| `unused direct module deps` | direct internal modules with no used classes recorded by Zinc | Suspicious. The module declared the box, but the compiler did not see source code use classes from it. This is often removable, unless the edge is needed for resources, reflection, generated code, framework conventions, or another non-classpath reason. |
-| `missing direct module deps` | transitive internal modules whose classes were used directly | Bad graph shape. The source code used pieces from a box that was only available through another box. Add this module as a direct dep. |
-| `dependency usage weight` | used classes per internal dependency, with percentages | Advisory coupling signal. It shows how much of the current module's internal dependency usage comes from each dependency, and how much of that dependency's class surface was touched. |
+| `used direct module deps` | direct internal modules that contributed at least one directly referenced class | Good. The module declared the box, and the compiler saw code reference pieces from that box. |
+| `unused direct module deps` | direct internal modules with no directly referenced classes recorded by Zinc | Suspicious. The module declared the box, but the compiler did not see source code reference classes from it. This is often removable, unless the edge is needed for resources, reflection, generated code, framework conventions, or another non-classpath reason. |
+| `missing direct module deps` | transitive internal modules whose classes were referenced directly | Bad graph shape. The source code referenced pieces from a box that was only available through another box. Add this module as a direct dep. |
+| `dependency reference weight` | directly referenced classes per internal dependency, with percentages | Advisory coupling signal. It shows how much of the current module's internal dependency references come from each dependency, and how much of that dependency's class surface was referenced. |
 | `dependency source weight` | source files carried by each internal dependency edge | Compile-cost signal. Absolute weight is the whole dependency box. Delta weight is what this edge uniquely adds or saves after shared transitive deps are counted. |
 | `used library classpath entries` | external jars/classpath entries with usage recorded by Zinc | Informational today. External Maven deps are already compiled, so the current plugin does not fail on these. |
 
@@ -419,10 +419,10 @@ graph is hiding what `appA` really needs. The fix is usually:
 appA -> uiWidget
 ```
 
-In the detail tables, `used classes` is the number of class names from that
-upstream module that Zinc saw the current module touch. `sample` shows a capped
-list of examples; the cap is controlled by `strictDepsMaxClassesPerModule`
-(default: `12`).
+In the detail tables, `directly referenced classes` is the number of class names
+from that upstream module that Zinc saw the current module reference directly.
+`sample` shows a capped list of examples; the cap is controlled by
+`strictDepsMaxClassesPerModule` (default: `12`).
 
 </details>
 

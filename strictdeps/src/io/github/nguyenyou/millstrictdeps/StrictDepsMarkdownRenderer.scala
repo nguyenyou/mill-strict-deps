@@ -55,7 +55,7 @@ object StrictDepsMarkdownRenderer {
   ): Unit = {
     builder.append("## Classpath Reachability\n\n")
     builder.append(
-      "This graph starts at dependency classes directly used by this module, then follows Zinc class dependencies through transitive compile module deps.\n\n"
+      "This graph starts at dependency classes directly referenced by this module, then follows Zinc class dependencies through transitive compile module deps.\n\n"
     )
 
     builder.append("| metric | classes | sources |\n")
@@ -64,7 +64,7 @@ object StrictDepsMarkdownRenderer {
       s"| provided by dependency modules | ${reachability.providedClassCount} | ${reachability.providedSourceCount} |\n"
     )
     builder.append(
-      s"| directly used roots | ${reachability.directUsedClassCount} | ${reachability.directUsedSourceCount} |\n"
+      s"| directly referenced roots | ${reachability.directUsedClassCount} | ${reachability.directUsedSourceCount} |\n"
     )
     builder.append(
       s"| reachable needed | ${reachability.reachableClassCount} (${formatPercent(reachability.reachableClassPercent)}) | ${reachability.reachableSourceCount} (${formatPercent(reachability.reachableSourcePercent)}) |\n"
@@ -158,16 +158,16 @@ object StrictDepsMarkdownRenderer {
       weights: Seq[StrictDepsModuleUsageWeight],
       maxClassesPerModule: Int
   ): Unit = {
-    builder.append("## Dependency Usage Weight\n\n")
+    builder.append("## Dependency Reference Weight\n\n")
     builder.append(
-      "These numbers are advisory. They count distinct dependency classes touched by this module.\n\n"
+      "These numbers are advisory. They count distinct dependency classes directly referenced by this module.\n\n"
     )
 
     if (weights.isEmpty) {
       builder.append("_No internal dependency class usage recorded by Zinc._\n\n")
     } else {
       builder.append(
-        "| module | relationship | used classes | share of this module's internal usage | dependency classes touched | sample |\n"
+        "| module | relationship | directly referenced classes | share of this module's internal references | dependency classes referenced | sample |\n"
       )
       builder.append("| --- | --- | ---: | ---: | ---: | --- |\n")
       weights.foreach { weight =>
@@ -202,7 +202,7 @@ object StrictDepsMarkdownRenderer {
     if (usages.isEmpty) {
       builder.append("_None._\n\n")
     } else {
-      builder.append("| module | used classes | sample |\n")
+      builder.append("| module | directly referenced classes | sample |\n")
       builder.append("| --- | ---: | --- |\n")
       usages.foreach { usage =>
         builder.append(

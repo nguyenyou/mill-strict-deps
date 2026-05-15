@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Renamed the human-facing `used classes` metric to `directly referenced classes`
+  and `Dependency Usage Weight` to `Dependency Reference Weight` in reports and
+  terminal tables, to make it clear that this is Zinc's direct source-reference
+  count and not classpath reachability.
+
 ## 1.8.1 - 2026-05-15
 
 ### Fixed

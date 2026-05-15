@@ -139,6 +139,7 @@ object StrictDepsAutofix {
     val normalByName = input.normalDirectDeps.map(ref => ref.moduleName -> ref).toMap
     val compileByName = input.compileDirectDeps.map(ref => ref.moduleName -> ref).toMap
     val graph = input.transitiveDeps.map(ref => ref.moduleName -> ref.directDependencyModuleNames.toSet).toMap
+    val importedBuildPrefixes = buildWildcardImportPrefixes(source, code)
 
     val addPairs = input.missingDirectDeps.distinct.map { moduleName =>
       refsByName.get(moduleName) match {
@@ -153,7 +154,7 @@ object StrictDepsAutofix {
           ))
         case Some(ref) =>
           val dependencyKind = additionKind(moduleName, input.normalDirectDeps, input.compileDirectDeps, graph)
-          sourceExpression(input.moduleSegments, ref.segments) match {
+          sourceExpression(input.moduleSegments, ref.segments, importedBuildPrefixes) match {
             case None =>
               Left(Skip(
                 "add",
@@ -223,7 +224,7 @@ object StrictDepsAutofix {
     }
 
     val methodResults = methodStates.map { state =>
-      planMethodEdit(source, body, input.moduleSegments, state)
+      planMethodEdit(source, body, input.moduleSegments, importedBuildPrefixes, state)
     }
     val edits = methodResults.flatMap(_._1)
     val skips = initialSkips ++ methodResults.flatMap(_._2)
@@ -242,6 +243,7 @@ object StrictDepsAutofix {
       source: String,
       body: ModuleBody,
       currentSegments: Segments,
+      importedBuildPrefixes: Seq[Seq[String]],
       state: MethodEditState
   ): (Seq[Edit], Seq[Skip], Seq[Replacement]) = {
     if (state.additions.isEmpty && state.removals.isEmpty) {
@@ -278,7 +280,7 @@ object StrictDepsAutofix {
           }
           (edits, Seq.empty, Seq(replacement))
         case Some(method) =>
-          val removalResult = removeArgs(method.args, state.removals, currentSegments)
+          val removalResult = removeArgs(method.args, state.removals, currentSegments, importedBuildPrefixes)
           val removalSkips = removalResult._1
           val keptArgs = removalResult._2
           val existingNormalized = keptArgs.map(normalizeExpression).toSet
@@ -321,10 +323,11 @@ object StrictDepsAutofix {
   private def removeArgs(
       args: Seq[String],
       removals: Seq[RemoveRequest],
-      currentSegments: Segments
+      currentSegments: Segments,
+      importedBuildPrefixes: Seq[Seq[String]]
   ): (Seq[Skip], Seq[String]) = {
     val removeCandidateSets = removals.map { request =>
-      request.module.moduleName -> removalCandidates(request.module, currentSegments)
+      request.module.moduleName -> removalCandidates(request.module, currentSegments, importedBuildPrefixes)
     }
     val matchedModules = mutable.Set.empty[String]
     val kept = Seq.newBuilder[String]
@@ -428,14 +431,20 @@ object StrictDepsAutofix {
     seen.toSet
   }
 
-  private def sourceExpression(currentSegments: Segments, targetSegments: Segments): Option[String] = {
+  private def sourceExpression(
+      currentSegments: Segments,
+      targetSegments: Segments,
+      importedBuildPrefixes: Seq[Seq[String]]
+  ): Option[String] = {
     labelsOnly(targetSegments).map { targetLabels =>
       val currentParent = labelsOnly(currentSegments).map(_.dropRight(1)).getOrElse(Seq.empty)
       val targetParent = targetLabels.dropRight(1)
       if (targetParent == currentParent && targetLabels.nonEmpty) {
         backtickWrap(targetLabels.last)
       } else {
-        ("build" +: targetLabels.map(backtickWrap)).mkString(".")
+        importedBuildExpressions(targetLabels, importedBuildPrefixes).headOption.getOrElse {
+          ("build" +: targetLabels.map(backtickWrap)).mkString(".")
+        }
       }
     }
   }
@@ -452,7 +461,52 @@ object StrictDepsAutofix {
     Option.when(valid)(labels.result())
   }
 
-  private def removalCandidates(module: ModuleRef, currentSegments: Segments): Set[String] = {
+  private def buildWildcardImportPrefixes(source: String, code: Array[Boolean]): Seq[Seq[String]] = {
+    val prefixes = Seq.newBuilder[Seq[String]]
+    var start = 0
+    while (start < source.length) {
+      val end = lineEnd(source, start)
+      parseBuildWildcardImport(codeSlice(source, code, start, end).trim).foreach(prefixes += _)
+      start = end + 1
+    }
+    prefixes.result().distinct
+  }
+
+  private def parseBuildWildcardImport(line: String): Option[Seq[String]] = {
+    val importPrefix = "import "
+    if (line.startsWith(importPrefix)) {
+      val imported = line.stripPrefix(importPrefix).filterNot(_.isWhitespace)
+      val buildPrefix = "build."
+      val wildcardTarget =
+        if (imported.startsWith(buildPrefix) && imported.endsWith(".*")) {
+          Some(imported.stripPrefix(buildPrefix).stripSuffix(".*"))
+        } else if (imported.startsWith(buildPrefix) && imported.endsWith("._")) {
+          Some(imported.stripPrefix(buildPrefix).stripSuffix("._"))
+        } else {
+          None
+        }
+      wildcardTarget.flatMap { target =>
+        val segments = target.split('.').toSeq.filter(_.nonEmpty).map(unbacktick)
+        Option.when(segments.nonEmpty)(segments)
+      }
+    } else {
+      None
+    }
+  }
+
+  private def unbacktick(value: String): String = {
+    if (value.length >= 2 && value.head == '`' && value.last == '`') {
+      value.substring(1, value.length - 1).replace("\\`", "`")
+    } else {
+      value
+    }
+  }
+
+  private def removalCandidates(
+      module: ModuleRef,
+      currentSegments: Segments,
+      importedBuildPrefixes: Seq[Seq[String]]
+  ): Set[String] = {
     (labelsOnly(module.segments), labelsOnly(currentSegments)) match {
       case (None, _) => Set.empty
       case (Some(labels), _) if labels.isEmpty => Set.empty
@@ -467,8 +521,19 @@ object StrictDepsAutofix {
           } else {
             Seq(full, fromRoot)
           }
-        candidates.map(normalizeExpression).toSet
+        (candidates ++ importedBuildExpressions(labels, importedBuildPrefixes)).map(normalizeExpression).toSet
     }
+  }
+
+  private def importedBuildExpressions(
+      targetLabels: Seq[String],
+      importedBuildPrefixes: Seq[Seq[String]]
+  ): Seq[String] = {
+    importedBuildPrefixes.flatMap { prefix =>
+      Option.when(targetLabels.length > prefix.length && targetLabels.take(prefix.length) == prefix) {
+        targetLabels.drop(prefix.length).map(backtickWrap).mkString(".")
+      }
+    }.distinct.sortBy(expression => (expression.count(_ == '.'), expression))
   }
 
   private def backtickWrap(value: String): String = {
@@ -562,7 +627,7 @@ object StrictDepsAutofix {
                   case Some(method) => DependencyMethodSearch.Found(method)
                   case None =>
                     DependencyMethodSearch.Unsupported(
-                      s"$methodName is not a supported Seq(...), Seq.empty, Nil, or super.$methodName ++ Seq(...) shape"
+                      s"$methodName is not a supported Seq(...), Seq.empty, Nil, super.$methodName ++ Seq(...), or Seq(...) ++ super.$methodName shape"
                     )
                 }
               case _ =>
@@ -629,7 +694,39 @@ object StrictDepsAutofix {
       start: Int,
       end: Int
   ): Option[(Int, Int, Seq[String])] = {
-    val first = skipWhitespace(source, code, start)
+    var i = skipWhitespace(source, code, start)
+    var parenDepth = 0
+    var bracketDepth = 0
+    var braceDepth = 0
+    var found: Option[(Int, Int, Seq[String])] = None
+    while (i < end && found.isEmpty) {
+      if (code(i)) {
+        if (parenDepth == 0 && bracketDepth == 0 && braceDepth == 0) {
+          found = parseSeqRegionAt(source, code, i, end)
+        }
+        if (found.isEmpty) {
+          source.charAt(i) match {
+            case '(' => parenDepth += 1
+            case ')' => parenDepth = (parenDepth - 1).max(0)
+            case '[' => bracketDepth += 1
+            case ']' => bracketDepth = (bracketDepth - 1).max(0)
+            case '{' => braceDepth += 1
+            case '}' => braceDepth = (braceDepth - 1).max(0)
+            case _ =>
+          }
+        }
+      }
+      i += 1
+    }
+    found
+  }
+
+  private def parseSeqRegionAt(
+      source: String,
+      code: Array[Boolean],
+      first: Int,
+      end: Int
+  ): Option[(Int, Int, Seq[String])] = {
     if (tokenAt(source, code, first, "Seq")) {
       val afterSeq = skipWhitespace(source, code, first + 3)
       if (afterSeq < end && source.charAt(afterSeq) == '(' && code(afterSeq)) {

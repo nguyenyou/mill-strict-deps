@@ -64,6 +64,115 @@ object StrictDepsAutofixTests extends TestSuite {
       ))
     }
 
+    test("updates a super-prefixed moduleDeps Seq") {
+      val source =
+        """object app extends ScalaModule with StrictDepsModule {
+          |  override def moduleDeps = super.moduleDeps ++ Seq(api, server, helper)
+          |}
+          |""".stripMargin
+      val plan = planFor(
+        source = source,
+        normalDirectDeps = Seq(ref("api"), ref("server"), ref("helper")),
+        transitiveDeps = Seq(
+          ref("api", directDependencyModuleNames = Seq("domain")),
+          ref("server"),
+          ref("helper"),
+          ref("domain")
+        ),
+        missingDirectDeps = Seq("domain"),
+        unusedDirectDeps = Seq("server")
+      )
+      val updated = plan.applyTo(source)
+
+      assert(plan.canApply)
+      assert(updated.contains("override def moduleDeps = super.moduleDeps ++ Seq(api, helper, domain)"))
+    }
+
+    test("updates a super-suffixed moduleDeps Seq") {
+      val source =
+        """object app extends ScalaModule with StrictDepsModule {
+          |  override def moduleDeps = Seq(api, server, helper) ++ super.moduleDeps
+          |}
+          |""".stripMargin
+      val plan = planFor(
+        source = source,
+        normalDirectDeps = Seq(ref("api"), ref("server"), ref("helper")),
+        transitiveDeps = Seq(
+          ref("api", directDependencyModuleNames = Seq("domain")),
+          ref("server"),
+          ref("helper"),
+          ref("domain")
+        ),
+        missingDirectDeps = Seq("domain"),
+        unusedDirectDeps = Seq("server")
+      )
+      val updated = plan.applyTo(source)
+
+      assert(plan.canApply)
+      assert(updated.contains("override def moduleDeps = Seq(api, helper, domain) ++ super.moduleDeps"))
+    }
+
+    test("adds dependency through build wildcard import") {
+      val source =
+        """import build.platform.*
+          |
+          |object app extends ScalaModule with StrictDepsModule {
+          |  override def moduleDeps = super.moduleDeps ++ Seq(stargazerCore.js)
+          |}
+          |""".stripMargin
+      val plan = planFor(
+        source = source,
+        moduleLine = 3,
+        normalDirectDeps = Seq(ref(
+          "platform.stargazerCore.js",
+          labels = Seq("platform", "stargazerCore", "js"),
+          directDependencyModuleNames = Seq("platform.stargazerModel.js")
+        )),
+        transitiveDeps = Seq(
+          ref(
+            "platform.stargazerCore.js",
+            labels = Seq("platform", "stargazerCore", "js"),
+            directDependencyModuleNames = Seq("platform.stargazerModel.js")
+          ),
+          ref("platform.stargazerModel.js", labels = Seq("platform", "stargazerModel", "js"))
+        ),
+        missingDirectDeps = Seq("platform.stargazerModel.js"),
+        unusedDirectDeps = Seq.empty
+      )
+      val updated = plan.applyTo(source)
+
+      assert(plan.canApply)
+      assert(updated.contains("override def moduleDeps = super.moduleDeps ++ Seq(stargazerCore.js, stargazerModel.js)"))
+    }
+
+    test("removes dependency through build wildcard import") {
+      val source =
+        """import build.modules.*
+          |
+          |object app extends ScalaModule with StrictDepsModule {
+          |  override def moduleDeps = super.moduleDeps ++ Seq(heimdall.heimdallCore.js, stargazerCore.js)
+          |}
+          |""".stripMargin
+      val plan = planFor(
+        source = source,
+        moduleLine = 3,
+        normalDirectDeps = Seq(
+          ref("modules.heimdall.heimdallCore.js", labels = Seq("modules", "heimdall", "heimdallCore", "js")),
+          ref("platform.stargazerCore.js", labels = Seq("platform", "stargazerCore", "js"))
+        ),
+        transitiveDeps = Seq(
+          ref("modules.heimdall.heimdallCore.js", labels = Seq("modules", "heimdall", "heimdallCore", "js")),
+          ref("platform.stargazerCore.js", labels = Seq("platform", "stargazerCore", "js"))
+        ),
+        missingDirectDeps = Seq.empty,
+        unusedDirectDeps = Seq("modules.heimdall.heimdallCore.js")
+      )
+      val updated = plan.applyTo(source)
+
+      assert(plan.canApply)
+      assert(updated.contains("override def moduleDeps = super.moduleDeps ++ Seq(stargazerCore.js)"))
+    }
+
     test("inserts missing moduleDeps method") {
       val source =
         """object app extends ScalaModule with StrictDepsModule {
@@ -173,14 +282,15 @@ object StrictDepsAutofixTests extends TestSuite {
       transitiveDeps: Seq[StrictDepsAutofix.ModuleRef],
       missingDirectDeps: Seq[String],
       unusedDirectDeps: Seq[String],
-      compileDirectDeps: Seq[StrictDepsAutofix.ModuleRef] = Seq.empty
+      compileDirectDeps: Seq[StrictDepsAutofix.ModuleRef] = Seq.empty,
+      moduleLine: Int = 1
   ): StrictDepsAutofix.Plan = {
     StrictDepsAutofix.plan(
       StrictDepsAutofix.Input(
         moduleName = "app",
         moduleSegments = Segments.labels("app"),
         sourceFile = os.pwd / "build.mill",
-        moduleLine = 1,
+        moduleLine = moduleLine,
         normalDirectDeps = normalDirectDeps,
         compileDirectDeps = compileDirectDeps,
         transitiveDeps = transitiveDeps,

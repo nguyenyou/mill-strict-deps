@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.9.1 - 2026-05-15
+
+### Fixed
+
+- Fixed `strictDepsApplyFix` so documented inherited dependency shapes such as
+  `super.moduleDeps ++ Seq(...)` and `Seq(...) ++ super.moduleDeps` are parsed
+  safely instead of being refused.
+- Fixed autofix add/remove matching for build files that use simple wildcard
+  imports such as `import build.<prefix>.*` or `import build.<prefix>._`, so
+  edits preserve the existing imported source style when safe.
+
+### Notes
+
+- Dynamic dependency expressions, cross modules, and ambiguous removals are
+  still refused. The autofix remains conservative and only edits explicit
+  supported `Seq(...)`, `Seq.empty`, and `Nil` dependency expressions.
+
 ## 1.9.0 - 2026-05-15
 
 ### Added

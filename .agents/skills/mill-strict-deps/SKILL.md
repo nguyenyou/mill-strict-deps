@@ -1,6 +1,6 @@
 ---
 name: mill-strict-deps
-description: "Use when working with the mill-strict-deps Mill plugin in Scala/JVM or Java/JVM Mill builds: installing the plugin, mixing `StrictDepsModule` into modules, running strict dependency reports, interpreting unused direct deps, missing direct deps, dependency weight, compile depth, compile waste, classpath reachability, JSON output, fix plans, checks, graph snapshots, and whole-build global commands."
+description: "Use when working with the mill-strict-deps Mill plugin in Scala/JVM or Java/JVM Mill builds: installing the plugin, mixing `StrictDepsModule` into modules, running strict dependency reports, interpreting unused direct deps, missing direct deps, dependency weight, compile depth, compile waste, classpath reachability, who-introduces transitive dependency chains, JSON output, fix plans, checks, graph snapshots, and whole-build global commands."
 ---
 
 # Mill Strict Deps
@@ -71,6 +71,9 @@ What is the compile-order shape?
 Which edge made this module compile unreachable sources?
   ./mill appA.strictDepsCompileWaste
 
+Which direct dep pulls in an unwanted transitive module?
+  ./mill appA.strictDepsWhoIntroduces --target uiWidget
+
 Which modules are upstream of most of the build?
   ./mill io.github.nguyenyou.millstrictdeps.strictDepsCommonAncestors/
 
@@ -106,6 +109,9 @@ When chaining Mill tasks, separate top-level tasks with `+`:
 
 `strictDepsCompileWaste`
 : Print a waste-first table for one module. Use it to answer: "which dependency row introduced source files this module cannot reach through Zinc class dependencies?" It accepts `limit`, default `50`.
+
+`strictDepsWhoIntroduces --target <target>`
+: Print the shortest transitive module-dependency chain from each direct compile module dep of the current module to `target`. Use it when a module appears in weight, depth, or waste output and you need to know which direct dep is pulling it in. Direct deps whose closure does not reach `target` are omitted. If none reaches `target`, the command prints a one-line message.
 
 `strictDepsGraphSnapshot`
 : Internal snapshot task used by global `strictDepsCommonAncestors`. It records graph nodes, direct edges, own source count, own line count, and own class count.
@@ -172,6 +178,9 @@ strict shape:
 `compile waste`
 : `wasted delta sources = delta sources - reachable delta sources`. Use it to identify direct edges or transitive rows that make clients compile source files they do not reach.
 
+`who introduces`
+: Given `target`, each row says: "this direct dep opens a path to that transitive module." A row like `appB  appB -> shared -> target` means `appA` sees `target` because `appA` directly depends on `appB`. Use this to decide which direct edge to remove, narrow, or move; do not add `target` as a direct dep unless current source actually uses its classes.
+
 ## Module Settings
 
 Override these in a module when needed:
@@ -212,8 +221,9 @@ object appA extends ScalaModule with StrictDepsModule {
 3. Use `strictDepsWeight` if a removal could save a lot of compile input.
 4. Use `strictDepsCompileWaste` when a dependency is real but suspiciously fat.
 5. Use `strictDepsCompileDepth` when compile order or upstream layering matters.
-6. Use global `strictDepsCommonAncestors` to find modules upstream of almost everything.
-7. Use global `strictDepsCompileWaste` to find repeated waste across clients.
-8. Edit `build.mill` manually and rerun the same report/check.
+6. Use `strictDepsWhoIntroduces --target targetModule` when an unwanted transitive module needs a direct-edge explanation.
+7. Use global `strictDepsCommonAncestors` to find modules upstream of almost everything.
+8. Use global `strictDepsCompileWaste` to find repeated waste across clients.
+9. Edit `build.mill` manually and rerun the same report/check.
 
 Do not treat the fix plan as a command script. It is a receipt: it tells which boxes to add or remove, but the agent still has to edit the Mill build intentionally and rerun validation.

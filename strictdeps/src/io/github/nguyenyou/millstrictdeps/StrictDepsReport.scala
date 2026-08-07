@@ -1,5 +1,7 @@
 package io.github.nguyenyou.millstrictdeps
 
+import mill.api.PathRef
+import mill.api.JsonFormatters.given
 import upickle.default.ReadWriter
 import upickle.default.macroRW
 
@@ -26,10 +28,14 @@ final case class StrictDepsModuleUsage(
 
 final case class StrictDepsModuleSnapshot(
     moduleName: String,
-    analysisFile: os.Path,
+    analysisFile: PathRef,
     directDependencyModuleNames: Seq[String] = Seq.empty,
     sourceFiles: Seq[String] = Seq.empty
 )
+
+object StrictDepsModuleSnapshot {
+  given ReadWriter[StrictDepsModuleSnapshot] = macroRW
+}
 
 final case class StrictDepsModuleWeightSnapshot(
     moduleName: String,

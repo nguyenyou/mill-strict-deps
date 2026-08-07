@@ -4,6 +4,7 @@ import mill.*
 import mill.api.BuildCtx
 import mill.api.Result
 import mill.javalib.JavaModule
+import mill.javalib.StrictDepsZincCompiler
 import mill.scalalib.ScalaModule
 
 import java.nio.file.Paths
@@ -28,6 +29,15 @@ trait StrictDepsModule extends ScalaModule { outer =>
   /** Whether `strictDepsCheck` fails when transitive module deps are used directly. */
   def strictDepsFailOnMissingDirectModuleDeps: T[Boolean] = Task {
     true
+  }
+
+  /** Cache-tracked Zinc analysis used by all strict-deps tasks. */
+  def strictDepsZincAnalysis: T[PathRef] = Task(persistent = true) {
+    materializeZincAnalysis(
+      module = outer,
+      regenerationSubPath = os.sub / "regenerated",
+      destinationSubPath = os.sub / "zinc"
+    )()
   }
 
   def strictDepsReport: T[PathRef] = Task {
@@ -149,7 +159,7 @@ trait StrictDepsModule extends ScalaModule { outer =>
     val report = StrictDepsAnalyzer.whoIntroduces(
       target = target,
       directModuleNames = directCompileModules.map(_.toString).toSet,
-      transitiveModules = strictDepsModuleSnapshots()()
+      transitiveModules = strictDepsModuleSnapshots()
     )
     Task.log.info(
       "\n" + StrictDepsWhoIntroducesRenderer.render(
@@ -179,7 +189,7 @@ trait StrictDepsModule extends ScalaModule { outer =>
     val currentNode = strictDepsGraphNode(
       moduleName = moduleSegments.render,
       module = outer,
-      analysisFile = compile().analysisFile,
+      analysisFile = strictDepsZincAnalysis(),
       sourceFiles = allSourceFiles()
     )
     val dependencyNodes = strictDepsDependencyGraphNodes()()
@@ -223,10 +233,10 @@ trait StrictDepsModule extends ScalaModule { outer =>
 
   private def analyzeStrictDeps(): Task[StrictDepsReport] = Task.Anon {
     val directModules = directCompileModules
-    val transitiveSnapshots = strictDepsModuleSnapshots()()
+    val transitiveSnapshots = strictDepsModuleSnapshots()
 
     StrictDepsAnalyzer.analyze(
-      currentAnalysisFile = compile().analysisFile,
+      currentAnalysisFile = strictDepsZincAnalysis(),
       directModuleNames = directModules.map(_.toString).toSet,
       transitiveModules = transitiveSnapshots,
       ignoredModuleNames = strictDepsIgnoredModuleDeps().toSet
@@ -236,21 +246,22 @@ trait StrictDepsModule extends ScalaModule { outer =>
   private def analyzeStrictDepsWeight(): Task[StrictDepsWeightReport] =
     Task.Anon {
       StrictDepsAnalyzer.weightReport(
-        currentAnalysisFile = compile().analysisFile,
+        currentAnalysisFile = strictDepsZincAnalysis(),
         currentModuleSourceFiles = sourceFileIds(allSourceFiles()).toSet,
         directModuleNames = directCompileModules.map(_.toString).toSet,
         millTransitiveModules = strictDepsModuleWeightSnapshots()(),
-        zincTransitiveModules = strictDepsModuleSnapshots()(),
+        zincTransitiveModules = strictDepsModuleSnapshots(),
         ignoredModuleNames = strictDepsIgnoredModuleDeps().toSet
       )
     }
 
-  private def strictDepsModuleSnapshots(): Task[Seq[StrictDepsModuleSnapshot]] = Task.Anon {
-    Task.traverse(outer.transitiveModuleCompileModuleDeps.distinct) { module =>
+  private def strictDepsModuleSnapshots: T[Seq[StrictDepsModuleSnapshot]] = Task(persistent = true) {
+    Task.traverse(outer.transitiveModuleCompileModuleDeps.distinct.zipWithIndex) { case (module, index) =>
       Task.Anon {
+        val analysisFile = dependencyZincAnalysis(module, index)()
         StrictDepsModuleSnapshot(
           moduleName = module.toString,
-          analysisFile = module.compile().analysisFile,
+          analysisFile = analysisFile,
           directDependencyModuleNames = directCompileModules(module)
             .map(_.toString)
             .distinct
@@ -277,16 +288,14 @@ trait StrictDepsModule extends ScalaModule { outer =>
   }
 
   private def strictDepsDependencyGraphNodes(): Task[Seq[StrictDepsGraphModule]] = Task.Anon {
-    Task.traverse(outer.transitiveModuleCompileModuleDeps.distinct) { module =>
-      Task.Anon {
-        strictDepsGraphNode(
-          moduleName = module.toString,
-          module = module,
-          analysisFile = module.compile().analysisFile,
-          sourceFiles = module.allSourceFiles()
-        )
-      }
-    }()
+    strictDepsModuleSnapshots().map { snapshot =>
+      StrictDepsAnalyzer.graphModule(
+        moduleName = snapshot.moduleName,
+        directDependencyModuleNames = snapshot.directDependencyModuleNames,
+        analysisFile = snapshot.analysisFile,
+        sourceFiles = snapshot.sourceFiles
+      )
+    }
   }
 
   private def directCompileModules: Seq[JavaModule] = {
@@ -327,7 +336,12 @@ trait StrictDepsModule extends ScalaModule { outer =>
     if (path.isAbsolute) {
       os.Path(path)
     } else {
-      BuildCtx.workspaceRoot / os.RelPath(moduleCtx.fileName)
+      val taskRelativePath = PathRef.toResolvedOsPath(os.Path(path, os.pwd))
+      if (os.exists(taskRelativePath)) {
+        taskRelativePath
+      } else {
+        BuildCtx.workspaceRoot / os.RelPath(moduleCtx.fileName)
+      }
     }
   }
 
@@ -338,7 +352,7 @@ trait StrictDepsModule extends ScalaModule { outer =>
   private def strictDepsGraphNode(
       moduleName: String,
       module: JavaModule,
-      analysisFile: os.Path,
+      analysisFile: PathRef,
       sourceFiles: Seq[PathRef]
   ): StrictDepsGraphModule = {
     StrictDepsAnalyzer.graphModule(
@@ -350,6 +364,38 @@ trait StrictDepsModule extends ScalaModule { outer =>
       analysisFile = analysisFile,
       sourceFiles = sourceFileIds(sourceFiles)
     )
+  }
+
+  private def materializeZincAnalysis(
+      module: JavaModule,
+      regenerationSubPath: os.SubPath,
+      destinationSubPath: os.SubPath
+  ): Task[PathRef] = Task.Anon {
+    val compilation = module.compile()
+    val preparedCompiler = StrictDepsZincCompiler.prepare(module)()
+    val analysisFile = if (StrictDepsZincFile.containsAnalysis(compilation.analysisFile)) {
+      compilation.analysisFile
+    } else {
+      Task.log.info(s"Regenerating missing Zinc analysis for ${module.toString}")
+      val regenerated = preparedCompiler.regenerate(Task.dest / regenerationSubPath)
+      if (!StrictDepsZincFile.containsAnalysis(regenerated.analysisFile)) {
+        Task.fail(s"Unable to regenerate Zinc analysis for ${module.toString}")
+      }
+      regenerated.analysisFile
+    }
+    StrictDepsZincFile.materialize(analysisFile, Task.dest / destinationSubPath)
+  }
+
+  private def dependencyZincAnalysis(module: JavaModule, index: Int): Task[PathRef] = {
+    module match {
+      case strictDepsModule: StrictDepsModule => strictDepsModule.strictDepsZincAnalysis
+      case _ =>
+        materializeZincAnalysis(
+          module = module,
+          regenerationSubPath = os.sub / "regenerated" / index.toString,
+          destinationSubPath = os.sub / "analyses" / index.toString / "zinc"
+        )
+    }
   }
 
   private def mergeGraphNodes(nodes: Seq[StrictDepsGraphModule]): Seq[StrictDepsGraphModule] = {

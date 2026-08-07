@@ -13,7 +13,7 @@ object Versions {
   val zinc = "2.0.1"
   val utest = "0.9.1"
   val upickle = "4.4.3"
-  val plugin = "1.0.0"
+  val plugin = "1.12.1"
 }
 
 object Constants {

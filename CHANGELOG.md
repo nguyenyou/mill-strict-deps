@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.12.1 - 2026-08-07
+
+### Fixed
+
+- Fixed strict-deps analysis when a cached Mill compilation result contains
+  class outputs but no readable Zinc analysis. The plugin now regenerates Zinc
+  analysis with the module's compiler inputs and materializes it as a
+  cache-tracked `PathRef` before analysis.
+- Fixed `strictDepsApplyFix` source-file resolution for Mill 1.2 daemon builds
+  whose build files are exposed through the `../mill-workspace` alias.
+
+### Changed
+
+- Updated the plugin build from Mill `1.1.6-7-15943a` to
+  `1.2.0-RC1-46-16168f` and Zinc from `2.0.0-M17` to `2.0.1`.
+
+### Notes
+
+- Existing Zinc analysis is reused when valid. Regeneration runs only when the
+  analysis is missing or unreadable; the plugin does not fall back to parsing
+  class files.
+
 ## 1.12.0 - 2026-05-15
 
 ### Changed

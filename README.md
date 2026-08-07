@@ -338,7 +338,7 @@ modules are actually wasting compile input for clients.
 
 ```scala
 //| mvnDeps:
-//| - io.github.nguyenyou::mill-strict-deps::1.10.0
+//| - io.github.nguyenyou::mill-strict-deps::1.12.1
 ```
 
 The `::version` shorthand appends `_mill$MILL_BIN_PLATFORM`, so on Mill 1.x it
@@ -599,9 +599,9 @@ Mill can create and print the signing env vars with:
 ./mill mill.scalalib.SonatypeCentralPublishModule/initGpgKeys
 ```
 
-The published version is derived from git tags with `0.1.0` as the no-tag
-fallback. Tag a release, for example `v0.1.0`, when you want Sonatype Central
-to receive exactly `0.1.0`; untagged or dirty commits include git metadata in
+The published version is derived from git tags with `1.12.1` as the no-tag
+fallback. Tag a release, for example `1.12.1`, when you want Sonatype Central
+to receive exactly `1.12.1`; untagged or dirty commits include git metadata in
 the version.
 
 </details>

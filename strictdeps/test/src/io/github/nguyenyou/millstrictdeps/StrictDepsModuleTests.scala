@@ -90,6 +90,13 @@ object StrictDepsModuleTests extends TestSuite {
     test("reports unused and missing direct module deps") {
       val resourceFolder = os.Path(sys.env("MILL_TEST_RESOURCE_DIR"))
       UnitTester(StrictDepsFixtureBuild, resourceFolder / "strict-deps-project").scoped { eval =>
+        val moduleSourceFile = PathRef.toResolvedOsPath(os.Path(sourcecode.File(), os.pwd))
+        os.copy.over(
+          moduleSourceFile,
+          eval.outPath / os.up / os.up / "mill-workspace" /
+            "strictdeps/test/src/io/github/nguyenyou/millstrictdeps/StrictDepsModuleTests.scala",
+          createFolders = true
+        )
         val result = eval(StrictDepsFixtureBuild.app.strictDepsReport).fold(
           failure => throw new Exception(failure.toString),
           identity
@@ -235,6 +242,42 @@ object StrictDepsModuleTests extends TestSuite {
           case Right(_) =>
             ()
         }
+      }
+    }
+
+    test("regenerates and materializes Zinc analysis when compile cache omitted it") {
+      val resourceFolder = os.Path(sys.env("MILL_TEST_RESOURCE_DIR"))
+      UnitTester(StrictDepsFixtureBuild, resourceFolder / "strict-deps-project").scoped { eval =>
+        def force[T](result: Either[?, UnitTester.Result[T]]): T = {
+          result.fold(
+            failure => throw new Exception(failure.toString),
+            success => success.value
+          )
+        }
+
+        val compilations = Seq(
+          force(eval(StrictDepsFixtureBuild.app.compile)),
+          force(eval(StrictDepsFixtureBuild.api.compile)),
+          force(eval(StrictDepsFixtureBuild.domain.compile)),
+          force(eval(StrictDepsFixtureBuild.helper.compile)),
+          force(eval(StrictDepsFixtureBuild.server.compile))
+        )
+        compilations.map(_.analysisFile).filter(os.exists).foreach(os.remove)
+
+        val report = force(eval(StrictDepsFixtureBuild.app.strictDepsReport))
+        val markdown = os.read(report.path)
+
+        assert(markdown.contains("Unused Direct Module Deps"))
+        assert(markdown.contains("server"))
+        assert(markdown.contains("Missing Direct Module Deps"))
+        assert(markdown.contains("domain"))
+        assert(markdown.contains("Used Direct Module Deps"))
+        assert(markdown.contains("api"))
+        assert(markdown.contains("helper"))
+
+        val materializedAnalysis = force(eval(StrictDepsFixtureBuild.app.strictDepsZincAnalysis))
+        assert(materializedAnalysis.validate())
+        assert(StrictDepsZincFile.containsAnalysis(materializedAnalysis.path))
       }
     }
 
@@ -408,7 +451,7 @@ object StrictDepsModuleTests extends TestSuite {
         val serverSources = sourceFiles(force(eval(StrictDepsFixtureBuild.server.allSourceFiles)))
 
         val report = StrictDepsAnalyzer.weightReport(
-          currentAnalysisFile = appCompile.analysisFile,
+          currentAnalysisFile = PathRef(appCompile.analysisFile),
           currentModuleSourceFiles = sourceFiles(force(eval(StrictDepsFixtureBuild.app.allSourceFiles))).toSet,
           directModuleNames = Set("api", "helper", "server"),
           millTransitiveModules = Seq(
@@ -418,10 +461,10 @@ object StrictDepsModuleTests extends TestSuite {
             StrictDepsModuleWeightSnapshot("server", serverSources)
           ),
           zincTransitiveModules = Seq(
-            StrictDepsModuleSnapshot("api", apiCompile.analysisFile, Seq("domain")),
-            StrictDepsModuleSnapshot("domain", domainCompile.analysisFile),
-            StrictDepsModuleSnapshot("helper", helperCompile.analysisFile),
-            StrictDepsModuleSnapshot("server", serverCompile.analysisFile)
+            StrictDepsModuleSnapshot("api", PathRef(apiCompile.analysisFile), Seq("domain")),
+            StrictDepsModuleSnapshot("domain", PathRef(domainCompile.analysisFile)),
+            StrictDepsModuleSnapshot("helper", PathRef(helperCompile.analysisFile)),
+            StrictDepsModuleSnapshot("server", PathRef(serverCompile.analysisFile))
           ),
           ignoredModuleNames = Set.empty
         )

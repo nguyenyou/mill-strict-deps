@@ -4,13 +4,15 @@ import scala.collection.mutable
 import scala.math.round
 import scala.util.control.NonFatal
 
+import mill.api.PathRef
+import mill.api.BuildCtx
 import sbt.internal.inc.Analysis
 import sbt.internal.inc.FileAnalysisStore
 
 object StrictDepsAnalyzer {
 
   def weightReport(
-      currentAnalysisFile: os.Path,
+      currentAnalysisFile: PathRef,
       currentModuleSourceFiles: Set[String],
       directModuleNames: Set[String],
       millTransitiveModules: Seq[StrictDepsModuleWeightSnapshot],
@@ -498,7 +500,7 @@ object StrictDepsAnalyzer {
   def graphModule(
       moduleName: String,
       directDependencyModuleNames: Seq[String],
-      analysisFile: os.Path,
+      analysisFile: PathRef,
       sourceFiles: Seq[String]
   ): StrictDepsGraphModule = {
     val ownSources = sourceFiles.toSet
@@ -515,7 +517,7 @@ object StrictDepsAnalyzer {
   }
 
   def analyze(
-      currentAnalysisFile: os.Path,
+      currentAnalysisFile: PathRef,
       directModuleNames: Set[String],
       transitiveModules: Seq[StrictDepsModuleSnapshot],
       ignoredModuleNames: Set[String]
@@ -1220,10 +1222,12 @@ object StrictDepsAnalyzer {
   }
 
   private def sourceLineCount(sourceFile: String): Int = {
-    sourcePath(sourceFile)
-      .filter(path => os.exists(path) && os.isFile(path))
-      .map(path => os.read.lines(path).size)
-      .getOrElse(0)
+    BuildCtx.withFilesystemCheckerDisabled {
+      sourcePath(sourceFile)
+        .filter(path => os.exists(path) && os.isFile(path))
+        .map(path => os.read.lines(path).size)
+        .getOrElse(0)
+    }
   }
 
   private def sourcePath(sourceFile: String): Option[os.Path] = {
@@ -1242,12 +1246,12 @@ object StrictDepsAnalyzer {
       .sorted
   }
 
-  private def readAnalysis(analysisFile: os.Path): Analysis = {
+  private def readAnalysis(analysisFile: PathRef): Analysis = {
     val contents = FileAnalysisStore
-      .binary(analysisFile.toIO)
+      .binary(PathRef.toAbsFile(analysisFile))
       .get()
     if (contents.isEmpty) {
-      sys.error(s"No Zinc analysis found at $analysisFile")
+      sys.error(s"No Zinc analysis found at ${analysisFile.path}")
     }
     contents
       .get()
